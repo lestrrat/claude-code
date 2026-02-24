@@ -20,7 +20,7 @@ CRITICAL: Approval is PER-INSTANCE. The user saying "commit and push" once does 
 
 ## Commit Messages
 
-- Terse.
+- CRITICAL: Terse.
 - NEVER include Co-Authored-By or any AI/agent attribution.
 
 ## Branch Naming
