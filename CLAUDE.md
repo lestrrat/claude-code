@@ -8,6 +8,7 @@
 # Temp Files
 
 - NEVER use `/tmp/`. Use `$PROJECT_DIR/.tmp/`.
+- NEVER commit `.tmp/` or its contents to git.
 - Periodically clean up `.tmp/`: delete files older than 7 days or when total size exceeds 50 MB (largest files first).
 
 # Pre-Read Rules
@@ -21,3 +22,4 @@ Read linked doc BEFORE any work in that area. No exceptions.
 | GitHub | Issues, PRs, checks, releases | `~/.claude/docs/github.md` |
 | Remote | gh, curl, wget, kubectl, cloud CLIs, etc. | `~/.claude/docs/remote-data.md` |
 | Report | Reporting results to user | `~/.claude/docs/reporting.md` |
+| Commit msg | formatting commit messages | `~/.claude/docs/commit-messages.md` |
