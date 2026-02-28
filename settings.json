@@ -13,6 +13,7 @@
       "Bash(git stash:*)",
       "Bash(git status:*)",
       "Bash(go build:*)",
+      "Bash(go vet:*)",
       "Bash(go clean:*)",
       "Bash(go list:*)",
       "Bash(go test:*)",
