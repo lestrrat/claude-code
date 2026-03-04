@@ -7,11 +7,14 @@
       "Bash(cd:*)",
       "Bash(echo:*)",
       "Bash(git diff:*)",
+      "Bash(git cherry:*)",
+      "Bash(git fetch:*)",
       "Bash(git log:*)",
       "Bash(git ls-tree:*)",
       "Bash(git show:*)",
       "Bash(git stash:*)",
       "Bash(git status:*)",
+      "Bash(git worktree add:*)",
       "Bash(go build:*)",
       "Bash(go vet:*)",
       "Bash(go clean:*)",
@@ -26,7 +29,22 @@
       "Bash(tail -n:*)",
       "Bash(wc:*)",
       "Bash(which:*)",
-      "Bash(xxd:*)"
-    ]
+      "Bash(xxd:*)",
+      "Bash(golangci-lint run:*)",
+      "Bash(echo === $f ===:*)",
+      "Bash(for f in ent3 ent4 ns6 eve.xml xhtml1; do echo \"=== $f ===\" && HELIUM_LIBXML2_TEST_FILES=$f go test -v -race -tags debug -run TestLibxml2Compat ./... 2>&1 | grep -A20 \"Diff:\" | head -20 && echo; done)",
+      "Bash(grep DEBUG::*)",
+      "Bash(done)",
+      "Bash(HELIUM_RELAXNG_TEST_FILES=tutor3_5_2 go test:*)",
+      "Bash(HELIUM_RELAXNG_TEST_FILES=558452_1 go test:*)",
+      "Bash(perl:*)",
+      "Bash(golangci-lint linters:*)",
+      "Bash(go env:*)",
+      "Bash(.tmp/gen_golden.go:*)",
+      "Bash(go run:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)"
+    ],
+    "defaultMode": "default"
   }
 }

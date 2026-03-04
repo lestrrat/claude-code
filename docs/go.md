@@ -4,6 +4,7 @@
 
 - Prefer using github.com/stretchr/testify for testing over vanilla testing package, where applicable.
 - Only use github.com/stretchr/testify/require and not github.com/stretchr/testify/assert.
+- Unless there is no other way around it, write tests in the external package form `xxx_test` instead of `xxx`.
 
 ## Style
 

@@ -7,7 +7,7 @@ echo "Setting up Claude Code symlinks..."
 
 mkdir -p ~/.claude
 
-for item in CLAUDE.md docs settings.json; do
+for item in CLAUDE.md docs skills settings.json; do
   target="$this_dir/$item"
   link="$HOME/.claude/$item"
 

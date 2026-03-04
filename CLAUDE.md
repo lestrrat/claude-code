@@ -2,7 +2,8 @@
 
 # Shell
 
-- NEVER use `&&` or `||`. `;` allowed. Prefer `cd <dir>; cmd`.
+- NEVER use `&&` or `||`. `;` allowed but NOT for chaining `cd` with other commands.
+- When you need to run a command in a different directory, issue `cd <dir>` and the command as **separate sequential Bash calls**. This ensures each command matches its permission allowlist independently. `cd` back to the project directory afterward.
 - NEVER use shell operators: `|`, `>>`, `<`, `$(...)`, backticks. `>` is allowed ONLY for writing to `.tmp/` files.
 - NEVER use shell control structures: `for`, `while`, `until`, `if/then`, `case`. Use multiple parallel tool calls instead.
 - `head`/`tail`: MUST use `-n N`. NEVER `head -N` / `tail -N`.
