@@ -1,9 +1,5 @@
 # Git Operations
 
-## Command Style
-
-NEVER use `git -C`. Always `cd <dir>; git ...`.
-
 ## Permissions
 
 Free (no confirmation): `log`, `diff`, `status`, `show`, `blame`, `shortlog`, `describe`, `tag -l`, `branch -l`, `remote -v`, `stash list`, `rev-parse`, `ls-files`, `cat-file`, `worktree add/list/lock/unlock/move/prune/repair`
