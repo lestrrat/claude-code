@@ -26,9 +26,11 @@ Run `git cherry -v main <branch>`.
 
 `git cherry` compares patch-ids of individual commits. When a multi-commit branch is squash-merged into a single commit, the combined diff has a different patch-id than any individual commit, so `git cherry` reports all `+` even though the branch is fully merged. Detect this by computing the combined patch-id:
 
-1. Find the merge base: `base=$(git merge-base main <branch>)`
+Each step below is a separate Bash call. `git patch-id` only reads stdin, so `|` is permitted here as an exception.
+
+1. Find the merge base: `git merge-base main <branch>` → save output as `base`.
 2. Compute the combined patch-id of the branch: `git diff $base..<branch> | git patch-id --stable` → extract the first field as `branch_pid`.
-3. Compute patch-ids of recent commits on main (since merge-base): for each commit hash from `git log --format=%H $base..main`, run `git diff <hash>^..<hash> | git patch-id --stable` → extract the first field.
+3. For each commit hash from `git log --format=%H $base..main`: run `git diff <hash>^..<hash> | git patch-id --stable` → extract the first field.
 4. If `branch_pid` matches any commit's patch-id → **squash-merged**. Mark as candidate.
 5. If no match → **not merged**. Skip it.
 

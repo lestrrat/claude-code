@@ -21,10 +21,6 @@
 - NEVER commit `.tmp/` or its contents to git.
 - Periodically clean up `.tmp/`: delete files older than 7 days or when total size exceeds 50 MB (largest files first).
 
-# Git
-
-- Commit messages: terse, single line, ~50 chars max, no body, no attribution.
-
 # Pre-Read Rules
 
 Read linked doc BEFORE any work in that area. No exceptions.
