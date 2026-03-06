@@ -1,5 +1,9 @@
 # Go
 
+## Source Lookup
+
+Standard library and runtime source: `go env GOROOT` returns the root directory. Use this to read Go source code when needed.
+
 ## Testing
 
 - Prefer using github.com/stretchr/testify for testing over vanilla testing package, where applicable.

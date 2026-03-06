@@ -21,6 +21,10 @@
 - NEVER commit `.tmp/` or its contents to git.
 - Periodically clean up `.tmp/`: delete files older than 7 days or when total size exceeds 50 MB (largest files first).
 
+# Worktrees
+
+ALWAYS create a worktree BEFORE editing any code. NEVER work in the root checkout. See `~/.claude/docs/git-operations.md` for commands and naming conventions.
+
 # Pre-Read Rules
 
 Read linked doc BEFORE any work in that area. No exceptions.
