@@ -25,6 +25,10 @@
 
 ALWAYS create a worktree BEFORE editing any code. NEVER work in the root checkout. Each worktree MUST branch from a fresh, up-to-date main branch — fetch first, then branch from `origin/main` (or the repo's primary branch). NEVER branch one worktree off another. See `~/.claude/docs/git-operations.md` for commands and naming conventions.
 
+# Code Reviews
+
+Not-applicable review feedback → add inline code comment explaining why the concern doesn't apply. Prevents same comment in future reviews.
+
 # Pre-Read Rules
 
 Read linked doc BEFORE any work in that area. No exceptions.
