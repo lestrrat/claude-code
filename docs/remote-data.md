@@ -2,17 +2,17 @@
 
 ## Core Rule
 
-When running any command that fetches data from a remote source, ALWAYS write the output to a local file first, then process the file — NEVER pipe remote output directly into processing commands.
+ALWAYS write command output to `$PROJECT_DIR/.tmp/` first, then process the file. This applies to ALL commands that produce output you need to inspect or process — not just remote calls. NEVER pipe output directly into processing commands.
 
-This applies to (but is not limited to):
+Especially important for:
 - `gh` (GitHub CLI — API calls, PR views, issue lists, release assets, etc.)
 - `curl` / `wget`
 - `gcloud`, `aws`, `az` (cloud CLI tools)
 - `docker` (pulling logs, inspect output, etc.)
 - `kubectl` / `helm` (cluster queries)
 - `ssh` remote commands
-- `git log`, `git diff` against remote refs that trigger fetches
-- Any other CLI that hits a network endpoint and produces output
+- `git log`, `git diff` (especially against remote refs)
+- Build/test output, linter results, any command producing multi-line output
 
 ## Pattern
 

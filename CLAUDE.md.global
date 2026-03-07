@@ -11,7 +11,7 @@ These are FORBIDDEN in ALL Bash calls. Violations break the permission allowlist
 | Banned | Examples | Use instead |
 |--------|----------|-------------|
 | `&&` `\|\|` | `cd dir && make` | Separate sequential Bash calls |
-| `\|` (pipe) | `cmd \| grep x` | Run cmd, use Grep tool on output |
+| `\|` (pipe) | `cmd \| grep x` | Redirect to `.tmp/`, then Read/Grep the file |
 | `>>` `<` | `cmd >> file` | Write tool |
 | `$(...)` backticks | `echo $(date)` | Separate Bash call, capture result |
 | `;` with `cd` | `cd dir; make` | Separate sequential Bash calls |
@@ -41,6 +41,7 @@ ALWAYS use dedicated tools. Bash is ONLY for commands with no tool equivalent.
 - NEVER use `/tmp/`. Use `$PROJECT_DIR/.tmp/`.
 - NEVER commit `.tmp/` or its contents to git.
 - Periodically clean up `.tmp/`: delete files older than 7 days or when total size exceeds 50 MB (largest files first).
+- **Store command output**: when a Bash command produces output you need to process or inspect, redirect to `$PROJECT_DIR/.tmp/` first, then use Read/Grep on the file. See `~/.claude/docs/remote-data.md`.
 
 # Worktrees
 
@@ -59,7 +60,7 @@ Read linked doc BEFORE any work in that area. No exceptions.
 | Git | commit, push, add, branch, merge, rebase, worktree, etc. | `~/.claude/docs/git-operations.md` |
 | Go | Writing Go code | `~/.claude/docs/go.md` |
 | GitHub | Issues, PRs, checks, releases | `~/.claude/docs/github.md` |
-| Remote | gh, curl, wget, kubectl, cloud CLIs, etc. | `~/.claude/docs/remote-data.md` |
+| Cmd output | Processing Bash output, gh, curl, wget, kubectl, cloud CLIs | `~/.claude/docs/remote-data.md` |
 | Report | Reporting results to user | `~/.claude/docs/reporting.md` |
 | Commit msg | formatting commit messages | `~/.claude/docs/commit-messages.md` |
 | Agent docs | writing/editing CLAUDE.md, docs/, skills/ | `~/.claude/docs/agent-instructions.md` |
