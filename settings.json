@@ -22,7 +22,7 @@
       "Bash(go list:*)",
       "Bash(go test:*)",
       "Bash(go version:*)",
-      "Bash(go env:*)".
+      "Bash(go env:*)",
       "Bash(go list:*)",
       "Bash(go doc:*)",
       "Bash(go mod:*)",
