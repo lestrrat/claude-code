@@ -1,13 +1,14 @@
 {
   "permissions": {
     "allow": [
-      "Read(~/.claude/docs/**)",
       "Read(.tmp/**)",
+      "Read(~/.claude/docs/**)",
       "Bash(cat:*)",
       "Bash(cd:*)",
       "Bash(echo:*)",
-      "Bash(git diff:*)",
+      "Bash(gh api:*)",
       "Bash(git cherry:*)",
+      "Bash(git diff:*)",
       "Bash(git fetch:*)",
       "Bash(git log:*)",
       "Bash(git ls-tree:*)",
@@ -17,15 +18,15 @@
       "Bash(git worktree add:*)",
       "Bash(git worktree list:*)",
       "Bash(go build:*)",
-      "Bash(go vet:*)",
       "Bash(go clean:*)",
-      "Bash(go list:*)",
-      "Bash(go test:*)",
-      "Bash(go version:*)",
+      "Bash(go doc:*)",
       "Bash(go env:*)",
       "Bash(go list:*)",
-      "Bash(go doc:*)",
       "Bash(go mod:*)",
+      "Bash(go test:*)",
+      "Bash(go version:*)",
+      "Bash(go vet:*)",
+      "Bash(golangci-lint:*)",
       "Bash(grep:*)",
       "Bash(head:*)",
       "Bash(head -n:*)",
@@ -34,8 +35,7 @@
       "Bash(tail -n:*)",
       "Bash(wc:*)",
       "Bash(which:*)",
-      "Bash(xxd:*)",
-      "Bash(golangci-lint:*)"
+      "Bash(xxd:*)"
     ],
     "defaultMode": "default"
   }
