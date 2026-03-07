@@ -41,3 +41,4 @@ Read linked doc BEFORE any work in that area. No exceptions.
 | Remote | gh, curl, wget, kubectl, cloud CLIs, etc. | `~/.claude/docs/remote-data.md` |
 | Report | Reporting results to user | `~/.claude/docs/reporting.md` |
 | Commit msg | formatting commit messages | `~/.claude/docs/commit-messages.md` |
+| Agent docs | writing/editing CLAUDE.md, docs/, skills/ | `~/.claude/docs/agent-instructions.md` |
