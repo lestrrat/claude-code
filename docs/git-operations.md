@@ -1,5 +1,9 @@
 # Git Operations
 
+## Prohibited Flags
+
+NEVER use `git -C <dir>`. Use `cd <dir>` as a separate Bash call, then run the git command.
+
 ## Permissions
 
 Free (no confirmation): `log`, `diff`, `status`, `show`, `blame`, `shortlog`, `describe`, `tag -l`, `branch -l`, `remote -v`, `stash list`, `rev-parse`, `ls-files`, `cat-file`, `worktree add/list/lock/unlock/move/prune/repair`
