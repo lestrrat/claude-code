@@ -9,6 +9,7 @@ Standard library and runtime source: `go env GOROOT` returns the root directory.
 - Prefer using github.com/stretchr/testify for testing over vanilla testing package, where applicable.
 - Only use github.com/stretchr/testify/require and not github.com/stretchr/testify/assert.
 - Unless there is no other way around it, write tests in the external package form `xxx_test` instead of `xxx`.
+- Use `t.Context()` instead of `context.Background()` in tests. The test context is cancelled when the test ends.
 
 ## Style
 
