@@ -14,6 +14,7 @@ Standard library and runtime source: `go env GOROOT` returns the root directory.
 ## Style
 
 - Do not use named return values.
+- For existence-check maps, use `map[T]struct{}` not `map[T]bool`.
 
 ## Design
 
