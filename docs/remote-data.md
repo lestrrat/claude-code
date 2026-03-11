@@ -28,13 +28,6 @@ kubectl get pods -o json > $PROJECT_DIR/.tmp/pods.json
 # then jq '.items[] | ...' $PROJECT_DIR/.tmp/pods.json
 ```
 
-```bash
-# WRONG — piping remote output directly
-gh api /repos/owner/repo/issues | jq '.[].title'
-curl -sL https://example.com/data.json | grep foo
-kubectl get pods -o json | jq ...
-```
-
 ## File Naming
 
 Use `$PROJECT_DIR/.tmp/<tool>-<descriptive-slug>.<ext>` for temporary files.

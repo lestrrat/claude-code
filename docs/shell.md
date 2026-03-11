@@ -1,30 +1,19 @@
 # Shell Rules
 
-**One command per Bash call. No compound commands. No exceptions.**
-
-## Before EVERY Bash Call — Verify
-
-- [ ] Contains exactly ONE command (no `;` `&&` `||`)
-- [ ] No pipes (`|`) — redirect to `.tmp/` instead, then Read/Grep
-- [ ] No `cd` combined with other commands — `cd` must be its own Bash call
-- [ ] Not using `cat`/`head`/`tail`/`grep`/`find`/`sed`/`awk` — use dedicated tools
-
-If ANY check fails, split into separate Bash calls or use the correct dedicated tool.
+**One command per Bash call.**
 
 ## Banned Syntax
 
-FORBIDDEN in ALL Bash calls. Violations break the permission allowlist.
+`&&`, `||`, `;`, `git -C` are hook-enforced (automatically blocked). Other banned syntax:
 
-| Banned | Examples | Use instead |
-|--------|----------|-------------|
-| `&&` `\|\|` | `cd dir && make` | Separate sequential Bash calls |
-| `\|` (pipe) | `cmd \| grep x` | Redirect to `.tmp/`, then Read/Grep the file |
-| `>>` `<` | `cmd >> file` | Write tool |
-| `$(...)` backticks | `echo $(date)` | Separate Bash call, capture result |
-| `;` with `cd` | `cd dir; make` | Separate sequential Bash calls |
-| `for` `while` `until` `if/then` `case` | loops/conditionals | Multiple parallel tool calls |
+| Banned | Use instead |
+|--------|-------------|
+| `\|` (pipe) | Redirect to `.tmp/`, then Read/Grep the file |
+| `>>` `<` | Write tool |
+| `$(...)` backticks | Separate Bash call, capture result |
+| `for` `while` `until` `if/then` `case` | Multiple parallel tool calls |
 
-`>` is allowed ONLY for writing to `.tmp/` files. `;` is allowed ONLY between non-`cd` commands.
+`>` is allowed ONLY for writing to `.tmp/` files.
 
 ## Dedicated Tools Over Shell
 

@@ -15,9 +15,20 @@ Read linked doc BEFORE any work in that area. No exceptions.
 | Shell | Using Bash tool | `~/.claude/docs/shell.md` |
 | Git | commit, push, add, branch, merge, rebase, worktree, etc. | `~/.claude/docs/git-operations.md` |
 | Go | Writing Go code | `~/.claude/docs/go.md` |
-| GitHub | Issues, PRs, checks, releases | `~/.claude/docs/github.md` |
 | Cmd output | Processing Bash output, gh, curl, wget, kubectl, cloud CLIs | `~/.claude/docs/remote-data.md` |
-| Report | Reporting results to user | `~/.claude/docs/reporting.md` |
 | Commit msg | Formatting commit messages | `~/.claude/docs/commit-messages.md` |
-| Code review | Reviewing or responding to review feedback | `~/.claude/docs/code-reviews.md` |
+| Debugging | Fixing complex/multi-component bugs | `~/.claude/docs/debugging.md` |
 | Agent docs | Writing/editing CLAUDE.md, docs/, skills/ | `~/.claude/docs/agent-instructions.md` |
+
+# GitHub
+
+- ALWAYS use `gh` CLI for GitHub interactions. NEVER scrape pages or construct API URLs manually.
+- All `gh` output → store to `.tmp/` first (see remote-data rules above).
+
+# Reporting
+
+- Final report: summary of work + worktree name (`.worktrees/<branch>`) or directory.
+
+# Code Reviews
+
+- Not-applicable review feedback → add inline code comment explaining why. Prevents repeat comments.

@@ -1,4 +1,17 @@
 {
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/home/lestrrat/.claude/hooks/banned-commands.sh"
+          }
+        ]
+      }
+    ]
+  },
   "permissions": {
     "allow": [
       "Read(.tmp/**)",
@@ -8,6 +21,7 @@
       "Bash(echo:*)",
       "Bash(gh api:*)",
       "Bash(gh pr view:*)",
+      "Bash(git -C:*)",
       "Bash(git cherry:*)",
       "Bash(git diff:*)",
       "Bash(git fetch:*)",
