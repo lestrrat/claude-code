@@ -85,6 +85,7 @@ Verify claim with source and tests before changing code.
 
 ### Test Strategy
 
+- Use R/G testing for general development: make failing case visible first, then change code until test passes.
 - If existing tests already cover claim, run them first.
 - If claim is behavioral and uncovered, add focused test that fails before fix and passes after fix.
 - If claim is not directly testable, explain why and use code-level reasoning instead.
