@@ -19,11 +19,17 @@ Read linked doc BEFORE any work in that area. No exceptions.
 | Commit msg | Formatting commit messages | `~/.claude/docs/commit-messages.md` |
 | Debugging | Fixing complex/multi-component bugs | `~/.claude/docs/debugging.md` |
 | Agent docs | Writing/editing CLAUDE.md, docs/, skills/ | `~/.claude/docs/agent-instructions.md` |
+| Claude Code | Claude Code ONLY: task delegation, `/codex-exec`, slash-command workflows | `docs/claude-code.md` |
 
 # GitHub
 
 - ALWAYS use `gh` CLI for GitHub interactions. NEVER scrape pages or construct API URLs manually.
 - All `gh` output → store to `.tmp/` first (see remote-data rules above).
+
+# Execution
+
+- Focus on implementation first. Minimize repeated tests, pass/fail counting, and other check-in work during active editing.
+- Run broader verification only at meaningful checkpoints, before handoff, or when risk/blockers justify it.
 
 # Reporting
 
