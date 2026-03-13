@@ -39,7 +39,7 @@ Each step below is a separate Bash call. `git patch-id` only reads stdin, so `|`
 A branch or worktree is considered "actively being worked on" if any of these are true:
 
 - The worktree has uncommitted changes (staged or unstaged): `cd` to the worktree path first, then run `git status --porcelain` — any output means dirty.
-- The worktree has untracked files: also visible in `--porcelain` output (lines starting with `??`).
+- The worktree has untracked files outside `.tmp/`: visible in `--porcelain` output (lines starting with `??`). Ignore untracked `.tmp/` content.
 - The branch is currently checked out in any worktree (including the main working tree).
 
 ## Output

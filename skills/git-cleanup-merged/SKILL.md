@@ -13,6 +13,8 @@ Clean up local branches and worktrees whose changes have already been merged int
 
 Use the `git-detect-merged` skill to identify all merged branches, their merge type, active work status, and associated worktrees.
 
+- Treat untracked files under `.tmp/` as ignorable temp output, not active work.
+
 ### 2. Build cleanup candidates
 
 From the detection results:
@@ -21,6 +23,7 @@ From the detection results:
 - Include worktrees whose branch is merged AND clean.
 - Exclude `main` — NEVER delete it.
 - Exclude branches with active work (dirty or checked-out), even if merged.
+- If `.tmp/` is the only untracked content, still treat worktree as clean.
 
 ### 3. Present summary
 

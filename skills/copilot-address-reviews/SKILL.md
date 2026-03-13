@@ -45,7 +45,7 @@ Given a GitHub PR link, process Copilot review items one at a time. NEVER assume
 - Entry point for PR review item discovery.
 - Use `gh` CLI only. NEVER scrape HTML.
 - Save raw GitHub output to `.tmp/` first.
-- Fetch PR metadata + review threads.
+- Fetch PR metadata + all pages of review threads/comments.
 - Normalize unresolved Copilot-authored review comments into `.tmp/copilot-review-items.raw.json`.
 - Invoke `scripts/dedup_review_items.py` to write `.tmp/copilot-review-items.json`.
 - If GitHub response shape is incomplete for current PR, extend GraphQL query or inspect raw JSON before changing code.
@@ -61,6 +61,8 @@ Given a GitHub PR link, process Copilot review items one at a time. NEVER assume
 
 - Start with `scripts/fetch-review-items.sh <pr-url>`.
 - Treat `.tmp/copilot-review-items.json` as candidate worklist of unresolved items, not truth.
+- Inspect Copilot review submissions as well as inline discussion comments. Do not assume a `#pullrequestreview-...` URL is represented directly in normalized output.
+- If user points to review submission URL or review id, map it to attached inline review comments and confirm those comments are present in worklist before proceeding.
 - Filter results to authors that represent GitHub Copilot review bots. Do not assume exact login string is stable if raw output shows another Copilot variant.
 - Exclude resolved items from scope. Ignore them unless raw GitHub output suggests resolution state is wrong.
 - Capture for each item:
@@ -69,6 +71,7 @@ Given a GitHub PR link, process Copilot review items one at a time. NEVER assume
   - exact claim/request
   - thread state if available
 - Read raw GitHub output when:
+  - review submission URL needs to be mapped to inline comments
   - dedup merged items unexpectedly
   - line/path metadata looks wrong
   - thread state affects whether item still needs work
@@ -115,6 +118,12 @@ When asking user, include:
 - Avoid opportunistic cleanup unless required for fix or approved by user.
 - If multiple Copilot items map to same defect, ask user before combining them into one commit.
 - If current branch already addresses item, record it as already fixed and move on.
+
+## Review Interaction
+
+- NEVER post GitHub comments, review replies, review submissions, or issue comments on user's behalf.
+- Report decisions to user in local output instead.
+- If a GitHub comment would help, ask user first. Draft text only when user asks for it.
 
 ## Commit Rules
 

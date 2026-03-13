@@ -27,6 +27,210 @@ require_cmd() {
   fi
 }
 
+merge_review_thread_page() {
+  local aggregate_json="$1"
+  local page_json="$2"
+  local merged_json="${aggregate_json}.tmp"
+
+  jq -s '
+    .[0] as $aggregate
+    | .[1] as $page
+    | {
+        data: {
+          repository: {
+            pullRequest: {
+              reviewThreads: {
+                nodes: (
+                  ($aggregate.data.repository.pullRequest.reviewThreads.nodes // [])
+                  + ($page.data.repository.pullRequest.reviewThreads.nodes // [])
+                )
+              }
+            }
+          }
+        }
+      }
+  ' "$aggregate_json" "$page_json" >"$merged_json"
+
+  mv "$merged_json" "$aggregate_json"
+}
+
+merge_thread_comment_page() {
+  local aggregate_json="$1"
+  local page_json="$2"
+  local thread_id="$3"
+  local merged_json="${aggregate_json}.tmp"
+
+  jq \
+    --arg thread_id "$thread_id" \
+    --slurpfile page "$page_json" \
+    '
+      (.data.repository.pullRequest.reviewThreads.nodes) |= map(
+        if .id == $thread_id then
+          .comments.nodes += ($page[0].data.node.comments.nodes // [])
+          | .comments.pageInfo = ($page[0].data.node.comments.pageInfo // .comments.pageInfo)
+        else
+          .
+        end
+      )
+    ' "$aggregate_json" >"$merged_json"
+
+  mv "$merged_json" "$aggregate_json"
+}
+
+fetch_all_review_threads() {
+  local output_json="$1"
+  local cursor=""
+  local has_next="true"
+  local page_number=1
+
+  jq -n '
+    {
+      data: {
+        repository: {
+          pullRequest: {
+            reviewThreads: {
+              nodes: []
+            }
+          }
+        }
+      }
+    }
+  ' >"$output_json"
+
+  while [[ "$has_next" == "true" ]]; do
+    local page_json="$TMP_DIR/gh-pr-review-threads-page-$page_number.json"
+
+    gh api graphql \
+      -F owner="$REPO_OWNER" \
+      -F name="$REPO_NAME" \
+      -F number="$PR_NUMBER" \
+      -F after="$cursor" \
+      -f query='
+        query($owner: String!, $name: String!, $number: Int!, $after: String) {
+          repository(owner: $owner, name: $name) {
+            pullRequest(number: $number) {
+              reviewThreads(first: 100, after: $after) {
+                pageInfo {
+                  hasNextPage
+                  endCursor
+                }
+                nodes {
+                  id
+                  isResolved
+                  isOutdated
+                  path
+                  line
+                  startLine
+                  originalLine
+                  originalStartLine
+                  diffSide
+                  startDiffSide
+                  comments(first: 100) {
+                    pageInfo {
+                      hasNextPage
+                      endCursor
+                    }
+                    nodes {
+                      id
+                      databaseId
+                      url
+                      body
+                      createdAt
+                      authorAssociation
+                      author {
+                        login
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ' >"$page_json"
+
+    merge_review_thread_page "$output_json" "$page_json"
+
+    has_next=$(jq -r '.data.repository.pullRequest.reviewThreads.pageInfo.hasNextPage // false' "$page_json")
+    cursor=$(jq -r '.data.repository.pullRequest.reviewThreads.pageInfo.endCursor // ""' "$page_json")
+    page_number=$((page_number + 1))
+  done
+}
+
+fetch_all_thread_comments() {
+  local aggregate_json="$1"
+  local comment_thread_ids
+
+  comment_thread_ids=$(jq -r '
+    .data.repository.pullRequest.reviewThreads.nodes[]
+    | select(.comments.pageInfo.hasNextPage == true)
+    | .id
+  ' "$aggregate_json")
+
+  if [[ -z "$comment_thread_ids" ]]; then
+    return
+  fi
+
+  while IFS= read -r thread_id; do
+    [[ -n "$thread_id" ]] || continue
+
+    local cursor
+    local has_next
+    local page_number=2
+
+    cursor=$(jq -r '
+      .data.repository.pullRequest.reviewThreads.nodes[]
+      | select(.id == $thread_id)
+      | .comments.pageInfo.endCursor // ""
+    ' --arg thread_id "$thread_id" "$aggregate_json")
+    has_next=$(jq -r '
+      .data.repository.pullRequest.reviewThreads.nodes[]
+      | select(.id == $thread_id)
+      | .comments.pageInfo.hasNextPage // false
+    ' --arg thread_id "$thread_id" "$aggregate_json")
+
+    while [[ "$has_next" == "true" ]]; do
+      local page_json="$TMP_DIR/gh-thread-comments-${thread_id//[^A-Za-z0-9._-]/_}-page-$page_number.json"
+
+      gh api graphql \
+        -F threadId="$thread_id" \
+        -F after="$cursor" \
+        -f query='
+          query($threadId: ID!, $after: String) {
+            node(id: $threadId) {
+              ... on PullRequestReviewThread {
+                id
+                comments(first: 100, after: $after) {
+                  pageInfo {
+                    hasNextPage
+                    endCursor
+                  }
+                  nodes {
+                    id
+                    databaseId
+                    url
+                    body
+                    createdAt
+                    authorAssociation
+                    author {
+                      login
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ' >"$page_json"
+
+      merge_thread_comment_page "$aggregate_json" "$page_json" "$thread_id"
+
+      has_next=$(jq -r '.data.node.comments.pageInfo.hasNextPage // false' "$page_json")
+      cursor=$(jq -r '.data.node.comments.pageInfo.endCursor // ""' "$page_json")
+      page_number=$((page_number + 1))
+    done
+  done <<<"$comment_thread_ids"
+}
+
 extract_repo_parts() {
   local pr_url="$1"
   local trimmed="$pr_url"
@@ -125,45 +329,8 @@ extract_repo_parts "$CANONICAL_PR_URL"
 
 if [[ -z "$REVIEW_THREADS_JSON" ]]; then
   REVIEW_THREADS_JSON="$TMP_DIR/gh-pr-review-threads.json"
-  gh api graphql \
-    -F owner="$REPO_OWNER" \
-    -F name="$REPO_NAME" \
-    -F number="$PR_NUMBER" \
-    -f query='
-      query($owner: String!, $name: String!, $number: Int!) {
-        repository(owner: $owner, name: $name) {
-          pullRequest(number: $number) {
-            reviewThreads(first: 100) {
-              nodes {
-                id
-                isResolved
-                isOutdated
-                path
-                line
-                startLine
-                originalLine
-                originalStartLine
-                diffSide
-                startDiffSide
-                comments(first: 100) {
-                  nodes {
-                    id
-                    databaseId
-                    url
-                    body
-                    createdAt
-                    authorAssociation
-                    author {
-                      login
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    ' >"$REVIEW_THREADS_JSON"
+  fetch_all_review_threads "$REVIEW_THREADS_JSON"
+  fetch_all_thread_comments "$REVIEW_THREADS_JSON"
 fi
 
 jq -n \
