@@ -15,30 +15,38 @@ Given a GitHub PR link, process Copilot review items one at a time. NEVER assume
 
 ## Workflow
 
-1. Run `scripts/fetch-review-items.sh <pr-url>`.
-2. Read `.tmp/copilot-review-items.json` as primary worklist of unresolved items only.
-3. Inspect `.tmp/copilot-review-items.raw.json`, `.tmp/gh-pr-view.json`, and `.tmp/gh-pr-review-threads.json` when dedup or extraction needs verification.
-4. Select next unhandled unresolved item from worklist. NEVER work resolved items.
-5. For current item, choose exactly one outcome before moving on:
+1. Resolve bundled scripts relative to directory containing this `SKILL.md`, not current working directory. `cd` to skill directory first when needed.
+2. Run `./scripts/fetch-review-items.sh <pr-url>` from skill directory.
+3. Read `.tmp/copilot-review-items.json` as primary worklist of unresolved items only.
+4. Inspect `.tmp/copilot-review-items.raw.json`, `.tmp/gh-pr-view.json`, and `.tmp/gh-pr-review-threads.json` when dedup or extraction needs verification.
+5. Select next unhandled unresolved item from worklist. NEVER work resolved items.
+6. For current item, choose exactly one outcome before moving on:
    - valid → fix
    - invalid → no code change
    - subjective/constraint-driven/ambiguous → ask user
    - already fixed on branch → no code change
-6. After each valid item:
+7. After each valid item:
    - make smallest code change that addresses verified issue
    - run focused tests first
    - add/update tests when they materially prove claim or prevent regression
    - run broader relevant tests when change touches shared behavior
    - commit only files for that item
-7. After each invalid or already-fixed item:
+8. After each invalid or already-fixed item:
    - record why no code change is needed
    - if current source/tests do not already make decision obvious, add concise code comment near relevant logic so future reviewers can see reasoning or constraint
    - do not make speculative edits
-8. Mark current item handled, then look up whether more unhandled items remain.
-9. If more items remain, return to step 4. Continue until worklist is empty.
-10. After all items, report every item, decision, evidence, and commit hash when applicable.
+9. Mark current item handled, then look up whether more unhandled items remain.
+10. If more items remain, return to step 5. Continue until worklist is empty.
+11. After all items, report every item, decision, evidence, and commit hash when applicable.
 
 ## Scripts
+
+Resolve bundled resources relative to this `SKILL.md`. Script directory = `scripts/` next to this file.
+
+- Installed skill layout: skill directory contains `SKILL.md` + `scripts/` as siblings.
+- Repository layout: skill directory = `skills/copilot-address-reviews/`.
+- Prefer `cd` to skill directory, then run `./scripts/...`.
+- NEVER assume current working directory already is skill directory.
 
 ### `scripts/fetch-review-items.sh`
 
