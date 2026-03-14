@@ -31,6 +31,7 @@ Given a GitHub PR link, process Copilot review items one at a time. NEVER assume
    - add/update tests when they materially prove claim or prevent regression
    - run broader relevant tests when change touches shared behavior
    - commit only files for that item
+   - after commit, resolve corresponding GitHub review thread/comment if it is still unresolved
 8. After each invalid or already-fixed item:
    - record why no code change is needed
    - if current source/tests do not already make decision obvious, add concise code comment near relevant logic so future reviewers can see reasoning or constraint
@@ -130,6 +131,9 @@ When asking user, include:
 ## Review Interaction
 
 - NEVER post GitHub comments, review replies, review submissions, or issue comments on user's behalf.
+- Resolve relevant GitHub review thread/comment only after committed fix exists.
+- NEVER resolve review thread/comment before commit for that item exists.
+- Resolve thread/comment without posting reply text.
 - Report decisions to user in local output instead.
 - If a GitHub comment would help, ask user first. Draft text only when user asks for it.
 
