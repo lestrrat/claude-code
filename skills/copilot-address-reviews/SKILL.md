@@ -24,6 +24,7 @@ Given a GitHub PR link, process Copilot review items one at a time. NEVER assume
    - valid → fix
    - invalid → no code change
    - subjective/constraint-driven/ambiguous → ask user
+   - deferred/won't fix → ask user, then no code change
    - already fixed on branch → no code change
 7. After each valid item:
    - make smallest code change that addresses verified issue
@@ -32,9 +33,10 @@ Given a GitHub PR link, process Copilot review items one at a time. NEVER assume
    - run broader relevant tests when change touches shared behavior
    - commit only files for that item
    - after commit, resolve corresponding GitHub review thread/comment if it is still unresolved
-8. After each invalid or already-fixed item:
+8. After each invalid, deferred, won't-fix, or already-fixed item:
    - record why no code change is needed
    - if current source/tests do not already make decision obvious, add concise code comment near relevant logic so future reviewers can see reasoning or constraint
+   - if outcome is deferred or won't fix and user confirmed that outcome, resolve corresponding GitHub review thread/comment if it is still unresolved
    - do not make speculative edits
 9. Mark current item handled, then look up whether more unhandled items remain.
 10. If more items remain, return to step 5. Continue until worklist is empty.
@@ -132,7 +134,9 @@ When asking user, include:
 
 - NEVER post GitHub comments, review replies, review submissions, or issue comments on user's behalf.
 - Resolve relevant GitHub review thread/comment only after committed fix exists.
+- Resolve relevant GitHub review thread/comment after user-confirmed deferred/won't-fix decision exists.
 - NEVER resolve review thread/comment before commit for that item exists.
+- NEVER resolve deferred/won't-fix thread/comment before user decision for that item exists.
 - Resolve thread/comment without posting reply text.
 - Report decisions to user in local output instead.
 - If a GitHub comment would help, ask user first. Draft text only when user asks for it.
@@ -143,7 +147,7 @@ When asking user, include:
 - Stage only files relevant to current item.
 - Write commit message around behavioral change, not around Copilot.
 - Follow repository/user git rules before `git add` / `git commit`.
-- Do not create no-op commit for rejected, subjective, deferred, or already-fixed items.
+- Do not create no-op commit for rejected, subjective, deferred, won't-fix, or already-fixed items.
 
 ## Final Report
 
@@ -151,6 +155,6 @@ Report items in review order or grouped by file. For each item include:
 
 - item identifier or file/line
 - Copilot claim summary
-- decision: fixed / rejected / user-confirmed / deferred / already fixed
+- decision: fixed / rejected / deferred / won't fix / already fixed
 - evidence: code reading, tests run, or user instruction
 - commit hash for fixed items
