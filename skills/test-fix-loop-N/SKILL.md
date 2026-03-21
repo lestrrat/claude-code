@@ -48,10 +48,14 @@ If no parent branch given, ask user.
 1. Group by package → `(pkg_path, [test_names], count)`.
 2. Sort by count descending.
 3. Compile-error packages → isolated partition each (one package per partition).
-4. Target partition size: `ceil(total_failures / max_agents)`.
+4. Target partition size: **max 8 tests per agent.** Agents have finite context —
+   fewer tests means more context budget per test, which means more actual fixes.
+   Use `min(8, ceil(total_failures / max_agents))` as the target.
 5. Large packages (count > target) → split into sub-partitions by test name.
 6. Small packages → combine into one partition if combined count <= target.
 7. Final partition count: `min(len(partitions), max_agents)`.
+8. If there are more partitions than `max_agents`, merge the smallest partitions
+   until count equals `max_agents`.
 
 Per partition compute:
 
@@ -73,15 +77,50 @@ Store partition plan in `.tmp/partition-plan.txt`.
 
 Issue ALL Agent tool calls in **single block** (parallel execution).
 
-Each agent receives prompt:
+**IMPORTANT**: Subagents do NOT have access to the Skill tool — they cannot run
+`/test-fix-loop`. Instead, tell them to Read the skill file and follow it directly.
+They DO have Read, Edit, Write, Bash, Grep, Glob, and other core tools.
+
+Subagents also run in agent isolation worktrees branched from `main` — NOT from
+`$PARENT`. The prompt MUST instruct the agent to create its own worktree from
+`$PARENT` and work there exclusively.
+
+Each agent receives prompt (template — substitute actual values):
 
 ```
-Run /test-fix-loop <parent-branch> -run '^(TestA|TestB|TestC)$' ./pkg1 ./pkg2
+You are a test-fix agent. Read and follow the procedure in this file EXACTLY:
+
+  ~/.claude/skills/test-fix-loop/SKILL.md
+
+Arguments for the procedure:
+  - Parent branch ($PARENT): <parent-branch>
+  - Extra test args: -run '^(TestA|TestB|TestC)$' ./pkg1 ./pkg2
+  - Project root ($PROJECT): <absolute path to repo root>
+
+CRITICAL SETUP: Your current working directory is NOT on the correct branch.
+You MUST create a new worktree from $PARENT before doing anything else:
+  cd $PROJECT
+  git worktree add $PROJECT/.worktrees/<unique-branch> -b <unique-branch> $PARENT
+Then cd to that worktree. ALL work happens there.
 
 You are responsible for fixing ALL of these assigned failing tests:
 1. ./pkg1 — TestA
 2. ./pkg1 — TestB
 3. ./pkg2 — TestC
+
+CONTEXT CONSERVATION — READ THIS CAREFULLY:
+Your context window is finite. If you waste it on analysis, you will run out
+before making fixes. Follow this workflow strictly:
+
+1. Run your assigned tests ONCE to find failures.
+2. Pick the FIRST failing test. Debug it, fix it, verify it.
+3. COMMIT and MERGE immediately — do not batch fixes.
+4. Sync, re-run tests, pick the next failure. Repeat.
+
+DO NOT analyze all tests upfront. DO NOT read entire files — use Grep to find
+specific functions. DO NOT spend context exploring blockers — document and move on.
+Every iteration MUST produce a commit or a documented blocker. Pure analysis
+with no commit is wasted context.
 
 COMPLETION RULES:
 - MUST attempt every assigned test. Do NOT stop after fixing one or a few.
@@ -97,7 +136,7 @@ For each assigned test: test name, status (fixed/already-passing/blocked),
 root cause, fix description or blocker reason.
 ```
 
-- Each agent creates own worktree (test-fix-loop handles naming).
+- Each agent creates own worktree (prompt instructs this explicitly).
 - Cross-agent fix propagation: existing sync protocol resets to parent HEAD each iteration.
 - Wait for all agents to return.
 
@@ -126,14 +165,26 @@ root cause, fix description or blocker reason.
 
 ## 7. Retry Wave
 
+**This step is AUTOMATIC.** Do NOT stop to ask the user. Proceed immediately
+after final verification if the trigger condition is met.
+
 **Trigger**: failures remain AND (wave made progress OR any agent abandoned tests).
 
 1. Re-run discovery (step 2) against current state.
 2. Collect only tests still failing.
-3. Exclude tests confirmed as non-actionable blockers.
-4. Re-partition remaining failures, spawn new wave (steps 3–6).
+3. Exclude tests confirmed as non-actionable blockers (only truly non-actionable:
+   infra, permissions, network — NOT "complex" or "requires large change").
+4. If remaining count > 0 → re-partition and spawn new wave (steps 3–6).
 5. Cap at 3 total waves (initial + 2 retries).
-6. STOP if wave makes zero progress (same failure count as previous wave).
+6. STOP only if:
+   - Wave made zero progress (same failure count as previous wave), OR
+   - All remaining failures are truly non-actionable, OR
+   - 3 waves completed.
+
+**Between waves**: check for uncommitted work in agent worktrees. If an agent
+left uncommitted changes, verify them (run the agent's assigned tests with and
+without the changes). If they pass more tests → commit and merge before the
+next wave. This recovers work from agents that ran out of context before committing.
 
 ## 8. Cleanup
 
