@@ -28,6 +28,7 @@ Read linked doc BEFORE any work in that area. No exceptions.
 
 # Execution
 
+- Focus on solving root cause. Never skip tests unless user explicitly asks.
 - Focus on implementation first. Minimize repeated tests, pass/fail counting, and other check-in work during active editing.
 - Run broader verification only at meaningful checkpoints, before handoff, or when risk/blockers justify it.
 
