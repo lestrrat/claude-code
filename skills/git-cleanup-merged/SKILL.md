@@ -29,7 +29,7 @@ From the detection results:
 
 - Include branches that are merged AND have no active work (status: `clean`).
 - Include worktrees whose branch is merged AND clean.
-- Exclude `$TARGET` — NEVER delete it.
+- Exclude `$TARGET` and `main` — NEVER delete either.
 - Exclude branches with active work (dirty or checked-out), even if merged.
 - If `.tmp/` is the only untracked content, still treat worktree as clean.
 
@@ -55,7 +55,7 @@ Ask the user for a single confirmation before proceeding. Do NOT proceed without
 
 ## Rules
 
-- NEVER delete `$TARGET`.
+- NEVER delete `$TARGET` or `main`.
 - NEVER touch remote branches or remote tracking refs.
 - Use `-d` (safe delete) by default. Only use `-D` (force delete) if the user explicitly confirms.
 - If a worktree removal fails, report the error and continue with the remaining items.

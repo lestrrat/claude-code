@@ -15,13 +15,27 @@ Detect whether local branches and worktrees have their changes already merged in
 
 Refer to the target branch as `$TARGET` below.
 
+## Pre-filter: scope to branches forked from $TARGET
+
+When `$TARGET` is not `main`, only consider branches that forked from `$TARGET`'s own commits — not from shared ancestry with `main`. This prevents deleting unrelated branches (e.g. branches off `bar` when cleaning up `foo`).
+
+1. Compute `target_fork = git merge-base main $TARGET`.
+2. For each candidate branch `B`, compute `branch_base = git merge-base $TARGET B`.
+3. Check: `git merge-base --is-ancestor $branch_base $target_fork`.
+   - If **yes** → `B` forked from shared history (before `$TARGET` diverged from `main`). **Skip it.**
+   - If **no** → `B` forked from `$TARGET`'s own commits. **Keep it.**
+
+Always exclude `main` and `$TARGET` from candidates.
+
+When `$TARGET` is `main`, skip this pre-filter — all branches are in scope.
+
 ## Step A: Regular merge detection
 
-Run `git branch --merged $TARGET`. Any branch listed here (except `$TARGET` itself) is merged via a regular or fast-forward merge.
+Run `git branch --merged $TARGET`. From the results, apply the pre-filter above and exclude `$TARGET` and `main`.
 
 ## Step B: Squash merge detection
 
-Branches NOT listed by `--merged` may still have been squash-merged. For each remaining local branch, use a two-phase check:
+Branches NOT listed by `--merged` may still have been squash-merged. For each remaining local branch that passes the pre-filter, use a two-phase check:
 
 ### Phase 1: Single-commit cherry check
 
