@@ -76,13 +76,11 @@ After merge, return to your worktree and start next iteration.
 8. **Narrow verify** — rerun the specific test.
 9. **Full verify** — rerun full suite with exact command from step 2.
 10. If more actionable failures → repeat from step 3.
-11. **Lint**:
-    ```
-    golangci-lint run ./... > .tmp/golangci-lint.txt 2>&1
-    ```
-    Fix all issues. Re-run until clean.
-12. **Commit** all iteration fixes.
-13. **Merge** back to `$PARENT`.
+11. **Lint + Commit + Merge** — these three are ONE atomic step. Do all three every time:
+    a. Run lint: `golangci-lint run ./... > .tmp/golangci-lint.txt 2>&1`
+    b. If lint errors → fix them. Re-run until clean. Do NOT skip this.
+    c. Commit all fixes in this iteration.
+    d. Merge back to `$PARENT`.
 14. Repeat from step 1.
 
 **STOP** only when no actionable failures remain.
@@ -121,6 +119,29 @@ After merge, return to your worktree and start next iteration.
 - Decompose multi-layer failures. Prefer earliest failing assertion.
 - Prefer source fix over test edit.
 - Add skip ONLY when unsupported behavior is intentional — encode reason, keep it specific.
+
+## Context Conservation
+
+Your context window is finite. Wasting it on upfront analysis of all tests leaves
+nothing for actual fixes. Follow these rules to maximize fixes per session:
+
+- **One test at a time.** Find the first failure, debug it, fix it, verify, commit, merge.
+  Then sync and move to the next. Do NOT analyze all assigned tests before fixing any.
+- **Commit early, commit often.** After each fix (even partial), commit and merge back
+  to `$PARENT`. This preserves your work even if you run out of context later.
+  Other agents (and future retry waves) benefit from your merged fixes immediately.
+- **Minimize reads.** Read only the specific functions/lines relevant to the current
+  failure. Do not read entire files "for context" — use Grep to find the exact code.
+- **Skip test output you don't need.** After running tests, Grep for `--- FAIL:` to
+  find the first failure. Do not read the entire test output file.
+- **Don't re-analyze blockers.** If a test requires a large feature that you cannot
+  implement within a few focused edits, document it as blocked and move on immediately.
+  Do not spend context exploring "how hard it would be."
+- **CRITICAL: `cd` does NOT persist between Bash calls.** Every Bash invocation starts
+  fresh. Use `go -C $WORKTREE test ...` for ALL test/build commands, or prefix every
+  Bash command with `cd $WORKTREE && ...` — wait, `&&` is banned. Instead, always pass
+  absolute paths: `go test -C /full/path/to/worktree ./xslt3`. NEVER assume you are
+  in your worktree directory from a previous `cd` call.
 
 ## Rebase Conflict Handling
 

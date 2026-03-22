@@ -114,8 +114,9 @@ before making fixes. Follow this workflow strictly:
 
 1. Run your assigned tests ONCE to find failures.
 2. Pick the FIRST failing test. Debug it, fix it, verify it.
-3. COMMIT and MERGE immediately — do not batch fixes.
-4. Sync, re-run tests, pick the next failure. Repeat.
+3. Run `golangci-lint run ./...` — fix any lint errors.
+4. COMMIT and MERGE immediately — do not batch fixes.
+5. Sync, re-run tests, pick the next failure. Repeat.
 
 DO NOT analyze all tests upfront. DO NOT read entire files — use Grep to find
 specific functions. DO NOT spend context exploring blockers — document and move on.
@@ -175,11 +176,11 @@ after final verification if the trigger condition is met.
 3. Exclude tests confirmed as non-actionable blockers (only truly non-actionable:
    infra, permissions, network — NOT "complex" or "requires large change").
 4. If remaining count > 0 → re-partition and spawn new wave (steps 3–6).
-5. Cap at 3 total waves (initial + 2 retries).
+5. No wave cap. Keep spawning waves as long as progress is being made.
 6. STOP only if:
-   - Wave made zero progress (same failure count as previous wave), OR
-   - All remaining failures are truly non-actionable, OR
-   - 3 waves completed.
+   - Wave made zero progress (same subtest failure count as previous wave), OR
+   - All remaining failures are truly non-actionable.
+   Progress is measured by SUBTEST failure count, not just top-level test count.
 
 **Between waves**: check for uncommitted work in agent worktrees. If an agent
 left uncommitted changes, verify them (run the agent's assigned tests with and
@@ -224,7 +225,7 @@ Tests abandoned: Z
 - NEVER mix compile-error packages with test-failure packages in same partition.
 - ALWAYS anchor `-run` regex with `^...$`.
 - ALWAYS run final verification after all agents complete.
-- NEVER exceed 3 total waves.
+- Keep running waves until zero progress or all non-actionable.
 - NEVER skip retry wave if agents abandoned tests or wave made progress.
 - ALWAYS include full test assignment list + completion rules in agent prompts.
 - ALWAYS validate agent reports for completeness — detect early quitters.
