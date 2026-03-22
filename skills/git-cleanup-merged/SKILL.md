@@ -1,17 +1,25 @@
 ---
 name: git-cleanup-merged
-description: Clean up local branches and worktrees that have been merged into main.
+description: Clean up local branches and worktrees that have been merged into a target branch (default: main). Args: [target-branch]
 ---
 
 # Git Cleanup Merged
 
-Clean up local branches and worktrees whose changes have already been merged into `main`.
+Clean up local branches and worktrees whose changes have already been merged into a target branch.
+
+## Args
+
+`/git-cleanup-merged [target-branch]`
+
+- `target-branch` — branch to check against. Default: `main`.
+
+Refer to the target branch as `$TARGET` below.
 
 ## Workflow
 
 ### 1. Detect merged branches
 
-Use the `git-detect-merged` skill to identify all merged branches, their merge type, active work status, and associated worktrees.
+Use the `git-detect-merged` skill with `$TARGET` to identify all merged branches, their merge type, active work status, and associated worktrees.
 
 - Treat untracked files under `.tmp/` as ignorable temp output, not active work.
 
@@ -21,7 +29,7 @@ From the detection results:
 
 - Include branches that are merged AND have no active work (status: `clean`).
 - Include worktrees whose branch is merged AND clean.
-- Exclude `main` — NEVER delete it.
+- Exclude `$TARGET` — NEVER delete it.
 - Exclude branches with active work (dirty or checked-out), even if merged.
 - If `.tmp/` is the only untracked content, still treat worktree as clean.
 
@@ -47,7 +55,7 @@ Ask the user for a single confirmation before proceeding. Do NOT proceed without
 
 ## Rules
 
-- NEVER delete `main`.
+- NEVER delete `$TARGET`.
 - NEVER touch remote branches or remote tracking refs.
 - Use `-d` (safe delete) by default. Only use `-D` (force delete) if the user explicitly confirms.
 - If a worktree removal fails, report the error and continue with the remaining items.
