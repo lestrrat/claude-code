@@ -46,6 +46,24 @@ NEVER discard+redo. Exact sequence (each command is a separate Bash call):
 8. `git checkout .`
 9. `rm $PROJECT/.tmp/migrate.patch`
 
+## PR Comments
+
+Terse, direct. No filler, no preamble, no "Great catch", no "Thanks for the review".
+
+- Lead with what changed or why. Skip context the reviewer already has.
+- One thought per comment. No bullet lists unless comparing alternatives.
+- Use code references (`file:line`, backticks) over prose descriptions.
+- OK to be a fragment: "done", "fixed in abc1234", "intentional — avoids double-lock".
+- When dismissing a review item, say why in ≤1 sentence.
+
+## Push Guard
+
+Before pushing to a branch that has an associated PR, verify the PR is still open:
+
+`gh pr view <branch> --json state --jq .state`
+
+If state is `MERGED` or `CLOSED`, STOP. Do NOT push. Report to user that the PR is already merged/closed.
+
 ## Merged Branch Detection
 
 ALWAYS verify before worktree/branch deletion. Use the `git-detect-merged` skill for the canonical procedure.
