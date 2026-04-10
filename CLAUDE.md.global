@@ -2,7 +2,7 @@
 
 Verify BEFORE your first edit/write in every task:
 
-- [ ] /effort max is enabled
+- [ ] /effort max is enabled — if not, remind user to run `/effort max` before proceeding
 - [ ] In a worktree (`$PROJECT/.worktrees/<branch>`), NOT root checkout
 - [ ] Read all applicable pre-read docs (see table below)
 - [ ] `.tmp/` dir exists for command output storage
