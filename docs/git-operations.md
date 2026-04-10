@@ -12,9 +12,9 @@ REQUIRES explicit user request + confirmation EVERY time: `commit`, `push`, `add
 
 Approval is PER-INSTANCE. NEVER infer standing permission.
 
-## Commit Messages
+## Commit & PR Messages
 
-Read `~/.claude/docs/commit-messages.md` first.
+Read `~/.claude/docs/git-messages.md` first.
 
 ## Branch Naming
 

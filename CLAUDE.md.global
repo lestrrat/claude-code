@@ -2,6 +2,7 @@
 
 Verify BEFORE your first edit/write in every task:
 
+- [ ] /effort max is enabled
 - [ ] In a worktree (`$PROJECT/.worktrees/<branch>`), NOT root checkout
 - [ ] Read all applicable pre-read docs (see table below)
 - [ ] `.tmp/` dir exists for command output storage
@@ -16,7 +17,7 @@ Read linked doc BEFORE any work in that area. No exceptions.
 | Git | commit, push, add, branch, merge, rebase, worktree, etc. | `~/.claude/docs/git-operations.md` |
 | Go | Writing Go code | `~/.claude/docs/go.md` |
 | Cmd output | Processing Bash output, gh, curl, wget, kubectl, cloud CLIs | `~/.claude/docs/remote-data.md` |
-| Commit msg | Formatting commit messages | `~/.claude/docs/commit-messages.md` |
+| Git msgs | Formatting commits & PRs | `~/.claude/docs/git-messages.md` |
 | Debugging | Fixing complex/multi-component bugs | `~/.claude/docs/debugging.md` |
 | Agent docs | Writing/editing CLAUDE.md, docs/, skills/ | `~/.claude/docs/agent-instructions.md` |
 | Claude Code | Claude Code ONLY: task delegation, `/codex-exec`, slash-command workflows | `docs/claude-code.md` |
