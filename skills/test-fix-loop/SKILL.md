@@ -138,10 +138,9 @@ nothing for actual fixes. Follow these rules to maximize fixes per session:
   implement within a few focused edits, document it as blocked and move on immediately.
   Do not spend context exploring "how hard it would be."
 - **CRITICAL: `cd` does NOT persist between Bash calls.** Every Bash invocation starts
-  fresh. Use `go -C $WORKTREE test ...` for ALL test/build commands, or prefix every
-  Bash command with `cd $WORKTREE && ...` — wait, `&&` is banned. Instead, always pass
-  absolute paths: `go test -C /full/path/to/worktree ./xslt3`. NEVER assume you are
-  in your worktree directory from a previous `cd` call.
+  fresh. Either chain with `cd $WORKTREE && go test ./xslt3`, or pass an absolute path
+  via `-C`: `go test -C /full/path/to/worktree ./xslt3`. NEVER assume you are in your
+  worktree directory from a previous `cd` call.
 
 ## Rebase Conflict Handling
 

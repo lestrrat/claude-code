@@ -1,10 +1,10 @@
 # Shell Rules
 
-**One command per Bash call.**
+Prefer one command per Bash call. `&&`/`||`/`;` chaining and multi-line commands are allowed when commands are tightly coupled, but separate calls are still preferred when earlier results should inform later commands.
 
 ## Banned Syntax
 
-`&&`, `||`, `;`, `git -C` are hook-enforced (automatically blocked). Other banned syntax:
+Banned syntax:
 
 | Banned | Use instead |
 |--------|-------------|
@@ -29,7 +29,6 @@ ALWAYS use dedicated tools. Bash is ONLY for commands with no tool equivalent.
 
 ## Other
 
-- `head`/`tail`: MUST use `-n N`. NEVER `head -N` / `tail -N`.
 - Run commands in another directory → `cd <dir>` as its own Bash call, then the command as a separate Bash call. `cd` back afterward.
 
 ## Temp Files

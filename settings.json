@@ -1,17 +1,4 @@
 {
-  "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "/home/lestrrat/.claude/hooks/banned-commands.sh"
-          }
-        ]
-      }
-    ]
-  },
   "permissions": {
     "allow": [
       "Read(.tmp/**)",
@@ -44,14 +31,23 @@
       "Bash(golangci-lint:*)",
       "Bash(grep:*)",
       "Bash(head:*)",
-      "Bash(head -n:*)",
       "Bash(ls:*)",
       "Bash(tail:*)",
-      "Bash(tail -n:*)",
       "Bash(wc:*)",
       "Bash(which:*)",
       "Bash(xxd:*)"
     ],
     "defaultMode": "default"
-  }
+  },
+  "extraKnownMarketplaces": {
+    "openai-codex": {
+      "source": {
+        "source": "github",
+        "repo": "openai/codex-plugin-cc"
+      }
+    }
+  },
+  "effortLevel": "high",
+  "skipDangerousModePermissionPrompt": true,
+  "verbose": true
 }

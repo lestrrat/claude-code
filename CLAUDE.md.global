@@ -2,10 +2,9 @@
 
 Verify BEFORE your first edit/write in every task:
 
-- [ ] /effort max is enabled — if not, remind user to run `/effort max` before proceeding
-- [ ] In a worktree (`$PROJECT/.worktrees/<branch>`), NOT root checkout
+- [ ] If the task will edit tracked files: in a worktree (`$PROJECT/.worktrees/<branch>`), NOT root checkout. Read-only work (analysis, exploration, answering questions, running queries) can run anywhere — do NOT refuse or block on worktree setup. User can also explicitly override ("work here", "no worktree", etc.) for any task.
 - [ ] Read all applicable pre-read docs (see table below)
-- [ ] `.tmp/` dir exists for command output storage
+- [ ] `.tmp/` dir exists for command output storage (create if needed, even outside a worktree)
 
 # Pre-Read Rules
 
@@ -21,7 +20,7 @@ Read linked doc BEFORE any work in that area. No exceptions.
 | Git msgs | Formatting commits & PRs | `~/.claude/docs/git-messages.md` |
 | Debugging | Fixing complex/multi-component bugs | `~/.claude/docs/debugging.md` |
 | Agent docs | Writing/editing CLAUDE.md, docs/, skills/ | `~/.claude/docs/agent-instructions.md` |
-| Claude Code | Claude Code ONLY: task delegation, `/codex-exec`, slash-command workflows | `docs/claude-code.md` |
+| Claude Code | Claude Code ONLY: task delegation, `/codex-exec`, slash-command workflows | `~/.claude/docs/claude-code.md` |
 
 # GitHub
 

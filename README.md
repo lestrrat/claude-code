@@ -1,6 +1,6 @@
 # claude-code
 
-Personal configuration for [Claude Code](https://claude.ai/code). Contains global instructions, reference docs, skills, and settings.
+Personal configuration for [Claude Code](https://claude.ai/code). Contains global instructions, reference docs, skills, hooks, and settings.
 
 ## Setup
 

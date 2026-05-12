@@ -10,6 +10,7 @@
 
 - Title: same rules as commit messages above.
 - Body: terse bullet points only. No prose, no filler, no "this PR does X".
-- Summary section: 1–3 bullets stating what changed. Each bullet ≤ 1 line.
+- 1–3 bullets stating what changed. Each bullet ≤ 1 line.
+- No "Test plan" section. Ever.
 - No AI/agent attribution lines.
 - Omit sections with no content. Don't add empty headings.

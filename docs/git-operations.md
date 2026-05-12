@@ -1,12 +1,8 @@
 # Git Operations
 
-## Prohibited Flags
-
-NEVER use `git -C <dir>`. Use `cd <dir>` as a separate Bash call, then run the git command.
-
 ## Permissions
 
-Free (no confirmation): `log`, `diff`, `status`, `show`, `blame`, `shortlog`, `describe`, `tag -l`, `branch -l`, `remote -v`, `stash list`, `rev-parse`, `ls-files`, `cat-file`, `worktree add/list/lock/unlock/move/prune/repair`
+Free (no confirmation): `log`, `diff`, `status`, `show`, `stash`, `cherry`, `fetch`, `ls-tree`, `worktree add/list`
 
 REQUIRES explicit user request + confirmation EVERY time: `commit`, `push`, `add`, `worktree remove`, `--force`
 
@@ -24,13 +20,15 @@ Read `~/.claude/docs/git-messages.md` first.
 
 ALWAYS use worktrees. NEVER work in root checkout.
 
-Path: `$PWD/.worktrees/<branch>`
+Path: `$PROJECT/.worktrees/<branch>`
 
 | Action | Command |
 |--------|---------|
-| New branch | `git worktree add $PWD/.worktrees/<branch> -b <branch>` |
-| Existing branch | `git worktree add $PWD/.worktrees/<branch> <branch>` |
-| Remove (confirm) | `git worktree remove $PWD/.worktrees/<branch>` |
+| New branch | `git worktree add $PROJECT/.worktrees/<branch> -b <branch>` |
+| Existing branch | `git worktree add $PROJECT/.worktrees/<branch> <branch>` |
+| Remove (confirm) | `git worktree remove $PROJECT/.worktrees/<branch>` |
+
+Worktree directory name MUST match its checked-out branch. NEVER `git checkout <other-branch>` inside a worktree — the branch name is fixed to the worktree name for its entire lifetime.
 
 ### Migrate Root Changes to Worktree
 
@@ -66,4 +64,4 @@ If state is `MERGED` or `CLOSED`, STOP. Do NOT push. Report to user that the PR 
 
 ## Merged Branch Detection
 
-ALWAYS verify before worktree/branch deletion. Use the `git-detect-merged` skill for the canonical procedure.
+ALWAYS verify before worktree/branch deletion. Use the `git-detect-merged` skill to check, then the `git-cleanup-merged` skill to delete.

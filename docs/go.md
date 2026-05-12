@@ -15,7 +15,7 @@ Standard library and runtime source: `go env GOROOT` returns the root directory.
 
 - Do not use named return values.
 - For existence-check maps, use `map[T]struct{}` not `map[T]bool`.
-- Prefer early returns from functions, and early cotinue/break from loops/blocks
+- Prefer early returns from functions, and early continue/break from loops/blocks
 - Prefer shorter `if` branch first. In `if/else`, put shorter/simpler clause on top.
 - Prefer removing `else` via early return/continue/break when possible.
 
