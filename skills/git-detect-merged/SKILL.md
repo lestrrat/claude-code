@@ -35,26 +35,16 @@ Run `git branch --merged $TARGET`. From the results, apply the pre-filter above 
 
 ## Step B: Squash merge detection
 
-Branches NOT listed by `--merged` may still have been squash-merged. For each remaining local branch that passes the pre-filter, use a two-phase check:
+Branches NOT listed by `--merged` may still have been squash-merged. For each remaining local branch that passes the pre-filter, run:
 
-### Phase 1: Single-commit cherry check
+```
+~/.claude/scripts/git-is-squash-merged $TARGET <branch>
+```
 
-Run `git cherry -v $TARGET <branch>`.
+- Exit 0 → **squash-merged**. Mark as candidate.
+- Exit 1 → **not merged**. Skip it.
 
-- All `-` or no output → **squash-merged**. Mark as candidate.
-- Any `+` → continue to Phase 2.
-
-### Phase 2: Combined patch-id check (multi-commit squash merges)
-
-`git cherry` compares patch-ids of individual commits. When a multi-commit branch is squash-merged into a single commit, the combined diff has a different patch-id than any individual commit, so `git cherry` reports all `+` even though the branch is fully merged. Detect this by computing the combined patch-id:
-
-Each step below is a separate Bash call. `git patch-id` only reads stdin, so `|` is permitted here as an exception.
-
-1. Find the merge base: `git merge-base $TARGET <branch>` → save output as `base`.
-2. Compute the combined patch-id of the branch: `git diff $base..<branch> | git patch-id --stable` → extract the first field as `branch_pid`.
-3. For each commit hash from `git log --format=%H $base..$TARGET`: run `git diff <hash>^..<hash> | git patch-id --stable` → extract the first field.
-4. If `branch_pid` matches any commit's patch-id → **squash-merged**. Mark as candidate.
-5. If no match → **not merged**. Skip it.
+The script handles both single-commit cherry checks and multi-commit combined patch-id detection internally.
 
 ## Detecting active work
 

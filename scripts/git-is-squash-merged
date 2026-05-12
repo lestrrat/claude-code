@@ -1,0 +1,76 @@
+#!/bin/bash
+# git-is-squash-merged — check if a branch was squash-merged into a target.
+#
+# Usage: git-is-squash-merged <target-branch> <candidate-branch>
+#
+# Exit codes:
+#   0  — squash-merged (output: "squash-merged:cherry" or "squash-merged:patch-id")
+#   1  — not merged
+#   2  — usage error
+set -eu
+
+if [ $# -ne 2 ]; then
+  echo "Usage: git-is-squash-merged <target-branch> <candidate-branch>" >&2
+  exit 2
+fi
+
+TARGET="$1"
+BRANCH="$2"
+
+# Phase 1: Single-commit cherry check.
+# If git cherry reports all commits as already present (-) or no output,
+# the branch is squash-merged.
+cherry_output=$(git cherry -v "$TARGET" "$BRANCH" 2>/dev/null) || {
+  echo "error: git cherry failed for $TARGET..$BRANCH" >&2
+  exit 2
+}
+
+if [ -z "$cherry_output" ]; then
+  echo "squash-merged:cherry"
+  exit 0
+fi
+
+# Check if every line starts with "- " (all merged).
+has_unmerged=false
+while IFS= read -r line; do
+  case "$line" in
+    +*) has_unmerged=true; break ;;
+  esac
+done <<< "$cherry_output"
+
+if [ "$has_unmerged" = false ]; then
+  echo "squash-merged:cherry"
+  exit 0
+fi
+
+# Phase 2: Combined patch-id check for multi-commit squash merges.
+# When multiple commits are squash-merged into one, git cherry reports all "+"
+# because individual patch-ids differ from the combined diff's patch-id.
+base=$(git merge-base "$TARGET" "$BRANCH") || {
+  echo "error: cannot find merge-base for $TARGET and $BRANCH" >&2
+  exit 2
+}
+
+branch_pid_line=$(git diff "$base".."$BRANCH" | git patch-id --stable 2>/dev/null) || true
+if [ -z "$branch_pid_line" ]; then
+  # Empty diff means no real changes — treat as merged.
+  echo "squash-merged:patch-id"
+  exit 0
+fi
+branch_pid=${branch_pid_line%% *}
+
+# Compare against each commit on the target side since the merge-base.
+while IFS= read -r hash; do
+  commit_pid_line=$(git diff "$hash"^.."$hash" | git patch-id --stable 2>/dev/null) || true
+  if [ -z "$commit_pid_line" ]; then
+    continue
+  fi
+  commit_pid=${commit_pid_line%% *}
+  if [ "$branch_pid" = "$commit_pid" ]; then
+    echo "squash-merged:patch-id"
+    exit 0
+  fi
+done < <(git log --format=%H "$base".."$TARGET")
+
+# No match — not squash-merged.
+exit 1

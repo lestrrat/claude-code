@@ -14,6 +14,7 @@ Claude Code configuration dotfiles. No application code — nothing to build, te
 |------|---------|
 | `CLAUDE.md.global` | Global instructions → symlinked as `~/.claude/CLAUDE.md` (name changes) |
 | `docs/` | Reference docs loaded on-demand per pre-read rules table in `CLAUDE.md.global` |
+| `scripts/` | Reusable shell scripts → symlinked as `~/.claude/scripts/` |
 | `skills/` | User-invocable skills with YAML front matter (`name`, `description`) + steps |
 | `settings.json` | Bash command permission allowlists, format: `Bash(<prefix>:*)` |
 | `setup.sh` | Symlink installer. All items keep original name except `CLAUDE.md.global` → `CLAUDE.md` |

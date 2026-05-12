@@ -12,6 +12,8 @@
       "Bash(git cherry:*)",
       "Bash(git diff:*)",
       "Bash(git fetch:*)",
+      "Bash(git-is-squash-merged:*)",
+      "Bash(~/.claude/scripts/git-is-squash-merged:*)",
       "Bash(git log:*)",
       "Bash(git ls-tree:*)",
       "Bash(git show:*)",
