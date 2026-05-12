@@ -16,6 +16,7 @@ Read linked doc BEFORE any work in that area. No exceptions.
 | Shell | Using Bash tool | `~/.claude/docs/shell.md` |
 | Git | commit, push, add, branch, merge, rebase, worktree, etc. | `~/.claude/docs/git-operations.md` |
 | Go | Writing Go code | `~/.claude/docs/go.md` |
+| Go servers | Writing Go server, daemon, worker, listener, or other long-lived-goroutine code | `~/.claude/docs/go-server-lifecycle.md` |
 | Cmd output | Processing Bash output, gh, curl, wget, kubectl, cloud CLIs | `~/.claude/docs/remote-data.md` |
 | Git msgs | Formatting commits & PRs | `~/.claude/docs/git-messages.md` |
 | Debugging | Fixing complex/multi-component bugs | `~/.claude/docs/debugging.md` |
