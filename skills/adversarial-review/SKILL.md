@@ -235,6 +235,18 @@ For each assigned finding, read the cited file:line AND enough surrounding
 code (callers, validators, auth middleware, init code) to judge whether
 the trigger is actually reachable in this codebase.
 
+Ground external-API claims. When a finding's reasoning depends on how a
+stdlib / framework / third-party function behaves (e.g. "tls.Conn.SetDeadline
+doesn't propagate to the underlying conn", "json.Decoder accepts trailing
+data", "context.Background().Deadline() panics"), DO NOT accept that
+claim at face value from Phase 1. Open the dependency source or
+authoritative doc and verify the actual behavior. Cite the source you
+read (e.g. `$GOROOT/src/crypto/tls/conn.go:<line>`, official doc URL,
+package's own godoc) in the verdict. A claim about external behavior you
+cannot ground is grounds for UNCERTAIN, not CONFIRMED. The hostile pass
+overclaims about external semantics as often as about local ones —
+verifying these is Phase 2's job.
+
 For each finding, emit one verdict:
 
 - CONFIRMED — defect real, trigger reachable, severity correct.
@@ -244,6 +256,23 @@ For each finding, emit one verdict:
   invariant invalidates it, with file:line.
 - UNCERTAIN — cannot determine from code alone. State what info is
   needed.
+
+Verdict honesty:
+
+- "CONFIRMED with caveat" is not a verdict. If you can articulate the
+  caveat, the verdict is either ADJUSTED (defect narrower / less severe
+  than claimed) or REFUTED (caveat invalidates the claim). Forcing
+  yourself to pick one of the four labels exposes hedges as the audit
+  dodging its job.
+- "Pre-refactor parity" / "behavior matches prior code" is NOT a verdict
+  modifier on its own. Resolve it: either the prior code was correct
+  (→ REFUTED for the new code, since both are correct) or the prior
+  code was also buggy (→ CONFIRMED as a pre-existing defect, with
+  trigger and impact stated independently of when it was introduced).
+  "Same as before, so confirmed but not a regression" is hedging.
+- "Sloppy but not exploitable", "design issue exists in both versions",
+  "technically a leak but unreachable in practice" — same pattern. Pick
+  REFUTED, ADJUSTED, or CONFIRMED with a specific trigger.
 
 Bias toward REFUTED and ADJUSTED. The hostile pass overclaims by design.
 Confirming a finding requires evidence it is reachable, not absence of
@@ -261,10 +290,34 @@ If subagent unavailable or user declines, do the audit yourself, but explicitly 
 
 1. Re-read each cited location with intent to *disprove* the finding.
 2. For each finding, search for: input validators upstream, auth checks, type-system guarantees, framework defaults, tests that already cover the case.
-3. Apply the same CONFIRMED / ADJUSTED / REFUTED / UNCERTAIN verdicts.
-4. If you cannot find evidence to refute, that is NOT a confirmation — mark UNCERTAIN.
+3. For findings whose reasoning turns on the behavior of stdlib / framework / third-party APIs, read the dependency source (or authoritative doc) — do not accept the Phase 1 claim about external behavior on trust. Cite what you read.
+4. Apply the same CONFIRMED / ADJUSTED / REFUTED / UNCERTAIN verdicts. Reject "CONFIRMED with caveat" and "pre-refactor parity" as verdicts — resolve to one of the four labels with the reasoning explicit.
+5. If you cannot find evidence to refute, that is NOT a confirmation — mark UNCERTAIN.
 
 Same-context bias is real. Default to harsher self-criticism than feels natural.
+
+## Dispatcher spot-check before final report
+
+Phase 2 subagents can miss things too. Before merging verdicts into the final report, spot-check every CONFIRMED and ADJUSTED verdict for the two failure modes most likely to produce false confirmations:
+
+1. **Unverified external-API claim.** Does the verdict's reasoning rest on a claim about how a stdlib / framework / third-party function behaves? If so, did the audit cite the source it read to ground that claim? If not, the audit may have accepted Phase 1's claim on trust. Demote to UNCERTAIN and either re-dispatch the audit with an explicit "read the dependency source" instruction, or verify the claim yourself before promoting it.
+2. **Hedged confirmation.** Phrases like "CONFIRMED with caveat", "matches prior code", "this is sloppy but not exploitable", "the defect exists but" — every one is a sign the auditor couldn't fully commit. Re-read the verdict; if the hedge resolves to "the code is actually fine," demote to REFUTED with the reason. If it resolves to "the code is buggy in a way the audit struggled to articulate," dig in until you can articulate it.
+
+A 30-second pass over the 8–10 confirmed findings is cheaper than shipping a final report that misleads the user about which fixes matter. Past failure: a Phase 2 audit confirmed a TLS handshake-deadline finding by repeating Phase 1's (incorrect) claim that `*tls.Conn.SetDeadline` doesn't delegate to the underlying conn. The grounding step — reading `crypto/tls/conn.go` — would have refuted both in one minute.
+
+## Reflexive self-check before recommending fixes
+
+The dispatcher spot-check above catches hedges in audit verdicts. But the dispatcher's own final report — especially the "Top N fixes" recommendation and any prose summarizing confirmed findings — is a NEW piece of writing that can introduce its own hedges and ungrounded claims. **Apply the same rules to your own writing.** A spot-check that doesn't apply to the spot-checker has a blind spot exactly where it matters most.
+
+Before producing the final report, walk every item in your "Top N" recommendation through these checks:
+
+1. **Hedge ban on your own prose.** Re-read each top-N entry with the question: "if the user implements this exactly, will it fix a real defect, or am I recommending a defensive cleanup whose justification reduces to 'a future caller might'?" If the latter, drop or downgrade. Watch especially for: "validation asymmetry between X and Y" (resolve to: which is correct?), "the in-tree codepath is safe today but..." (then it's REFUTED), "low-level primitive vs high-level wrapper" (if the wrapper is the user-facing API, the primitive is internal — REFUTED on convention grounds), "consistency improvement" (cleanups are not the same as fixes — separate them).
+2. **External-API claims in the report must cite source.** Every "X function panics on Y" / "stdlib doesn't validate Z" / "Go arithmetic overflows here" — back it with a `$GOROOT/...` file:line or authoritative doc URL inline in the report. If you can't cite it in 30 seconds, demote to UNCERTAIN or omit. Do this BEFORE writing the recommendation, not after the user pushes back.
+3. **Math claims in particular.** Overflow / truncation / underflow claims require an arithmetic sanity check. For Go: `uint32 * time.Second` cannot overflow `int64` (max value `4.29e9 * 1e9 = 4.29e18` ≪ `9.22e18`). Don't recommend a fix for an overflow that can't happen.
+
+This step takes ~60 seconds for an 8-item top-N. Skipping it means recommending fixes the user will reasonably reject after they read the code — wasting their time and your credibility.
+
+Past failure: a whole-codebase adversarial review produced a Top-3 fixes list where the spot-check had already caught 9 hedge-confirmations in the audit output, but two of the three top-N items still relied on the same patterns (one with an unverified `time.Duration` overflow claim — `uint32 * time.Second` was assumed to overflow `int64` but cannot — and one with a "future external caller might forget" footgun). Both were dropped when the user re-applied the rules. The fix-rate of the recommended top-3 was 33% — and the user noticed before code was changed. Don't repeat: apply this reflexive check before, not after.
 
 ## Final Report
 
