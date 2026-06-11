@@ -33,7 +33,7 @@ Always read enough surrounding context to understand callers and invariants. Hun
 Measure surface BEFORE reading code:
 
 - PR/branch: `git diff --stat <base>...HEAD` (changed-file count, lines added+removed)
-- Dir/package: enumerate files with Glob (count = file count), then `wc -l <files> > .tmp/adversarial-review-loc.txt` and Read it. No pipes — shell rules apply.
+- Dir/package: enumerate files with Glob (count = file count), then `wc -l <files>` for LOC.
 
 Before starting, delete stale `.tmp/adversarial-review-*` files from previous runs. Intermediate file paths are fixed — concurrent reviews in the same checkout collide; run one at a time.
 
