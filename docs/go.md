@@ -11,6 +11,23 @@ Standard library and runtime source: `go env GOROOT` returns the root directory.
 - Unless there is no other way around it, write tests in the external package form `xxx_test` instead of `xxx`.
 - Use `t.Context()` instead of `context.Background()` in tests. The test context is cancelled when the test ends.
 
+## Examples
+
+Write user-facing usage examples as Go executable examples (`Example*` functions verified by `go test`) — NEVER as README-only snippets or untested markdown code blocks.
+
+NEVER write an example as a standalone executable (`package main` + `func main()`) — except when the user explicitly requests one.
+
+- Location: `examples/` directory at repo root. One concept per file.
+- File name: `<package>_<function_or_topic>_example_test.go`.
+- Package: `package examples_test`.
+- Function name: `Example_<package>_<topic>()` — package-level; name need not match an exported symbol.
+- Self-contained: minimal inline input data. No external files unless the feature requires them.
+- Deterministic: end with exact `// Output:` block — `go test` verifies it.
+- Error handling: `fmt.Printf("failed to <action>: %s\n", err); return`. NEVER `log.Fatal`/`panic`.
+- Comments explain what and why, not restating code.
+- Temp files when required: `os.MkdirTemp(".", ".tmp-<topic>-*")` + `defer os.RemoveAll(dir)`.
+- Verify: `go test ./examples/` + `go vet ./examples/` must pass.
+
 ## Style
 
 - Do not use named return values.
