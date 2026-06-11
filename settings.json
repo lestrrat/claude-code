@@ -51,5 +51,6 @@
   },
   "effortLevel": "high",
   "skipDangerousModePermissionPrompt": true,
-  "verbose": true
+  "verbose": true,
+  "model": "claude-fable-5[1m]"
 }
