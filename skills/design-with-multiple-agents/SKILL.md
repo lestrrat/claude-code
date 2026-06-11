@@ -3,7 +3,7 @@ name: design-with-multiple-agents
 description: Multi-agent design collaboration — Claude Code (reviewer) and Codex (designer) iterate on a design doc via file-based chat. Gathers requirements from user, then runs a review loop until design is satisfactory. Args: <topic>
 ---
 
-# Design Chat
+# Design With Multiple Agents
 
 Create a design document through iterative collaboration between you (Claude Code, the reviewer)
 and Codex (the designer). You gather requirements, Codex drafts/revises, you review, repeat until
@@ -11,7 +11,7 @@ the design is solid.
 
 ## Args
 
-`/design-chat <topic>`
+`/design-with-multiple-agents <topic>`
 
 - `<topic>` — short description of what needs designing. If missing, ask the user.
 
@@ -24,6 +24,7 @@ the design is solid.
 
 All files live in `.tmp/design-chat/`:
 
+- `brief.md` — requirements brief (you write this, seed for Codex)
 - `design.md` — the design document (Codex writes/revises this)
 - `review-N.md` — your review for round N (N = 1, 2, 3, ...)
 
@@ -58,7 +59,7 @@ This file is the seed for Codex.
 Run Codex to create the initial design:
 
 ```
-codex -s danger-full-access exec "Read .tmp/design-chat/brief.md. Based on the brief, \
+codex exec --full-auto "Read .tmp/design-chat/brief.md. Based on the brief, \
 create a detailed design document at .tmp/design-chat/design.md. \
 Include: overview, proposed approach, data flow, key interfaces/types, \
 file structure, edge cases, and open questions. \
@@ -103,7 +104,7 @@ Criteria for `approved`:
 Run Codex to revise:
 
 ```
-codex -s danger-full-access exec "Read .tmp/design-chat/design.md (current design) \
+codex exec --full-auto "Read .tmp/design-chat/design.md (current design) \
 and .tmp/design-chat/review-N.md (review feedback). \
 Revise the design in-place at .tmp/design-chat/design.md to address all must-fix issues. \
 Pay special attention to why-challenges — if the reviewer questioned your rationale, \
