@@ -40,7 +40,7 @@ Create a split plan. Each proposed file gets:
 4. Constants/variables used across multiple groups → keep in a shared file (e.g., `constants.go`, `types.go`).
 5. `init()` functions → stay in the original filename or move with the group they initialize.
 6. Test files: if splitting `foo.go`, corresponding test declarations in `foo_test.go` should be split to match (e.g., `bar.go` gets `bar_test.go`). Ask user before splitting test files.
-7. Each resulting file should ideally be 50–200 lines. Avoid files under 20 lines unless they contain a single cohesive unit.
+7. Target ~500–1000 lines per resulting file (same sizing as `go-package-reorg`). Avoid files under ~50 lines unless they own a single cohesive concept.
 8. Preserve doc comments — they move with the declaration they document.
 9. Build tags and generate directives: only include in files that need them.
 
@@ -74,6 +74,7 @@ After all new files are created:
 1. Run `goimports -w` on all new/modified `.go` files in the package directory.
 2. Run `go build ./...` from the module root to confirm compilation.
 3. Run `go vet ./...` to catch issues.
+4. Run package tests: `go test ./<pkg>/... -count=1` — splits can move test declarations.
 
 If verification fails, diagnose and fix. Common issues:
 - Circular dependencies → cannot happen within same package, but check for build tag issues.
