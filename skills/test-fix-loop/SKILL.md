@@ -46,12 +46,13 @@ Rebase onto `$PARENT` so merge is fast-forward:
 git fetch . $PARENT
 git rebase $PARENT
 ```
-Then fast-forward `$PARENT`:
-```
-cd $PROJECT/.worktrees/$PARENT   # or wherever $PARENT worktree lives
-git merge --ff-only <your-branch>
-```
-If `--ff-only` fails → rebase again (another agent may have merged in between).
+Then fast-forward `$PARENT`. Locate where `$PARENT` is checked out:
+
+- If `$PARENT` has a worktree → `cd` there, run `git merge --ff-only <your-branch>`.
+- If `$PARENT` is in root checkout → `cd $PROJECT`, run `git merge --ff-only <your-branch>`.
+- If `$PARENT` is not checked out anywhere → from your worktree run `git fetch . <your-branch>:$PARENT`.
+
+If fast-forward fails → rebase again (another agent may have merged in between), retry.
 After merge, return to your worktree and start next iteration.
 
 ## Loop
@@ -81,7 +82,7 @@ After merge, return to your worktree and start next iteration.
     b. If lint errors → fix them. Re-run until clean. Do NOT skip this.
     c. Commit all fixes in this iteration.
     d. Merge back to `$PARENT`.
-14. Repeat from step 1.
+12. Repeat from step 1.
 
 **STOP** only when no actionable failures remain.
 
@@ -137,10 +138,10 @@ nothing for actual fixes. Follow these rules to maximize fixes per session:
 - **Don't re-analyze blockers.** If a test requires a large feature that you cannot
   implement within a few focused edits, document it as blocked and move on immediately.
   Do not spend context exploring "how hard it would be."
-- **CRITICAL: `cd` does NOT persist between Bash calls.** Every Bash invocation starts
-  fresh. Either chain with `cd $WORKTREE && go test ./xslt3`, or pass an absolute path
-  via `-C`: `go test -C /full/path/to/worktree ./xslt3`. NEVER assume you are in your
-  worktree directory from a previous `cd` call.
+- **Verify cwd before test/build runs.** Working directory persists between Bash calls,
+  but merge-back steps `cd` elsewhere. Run `pwd` when unsure, or pass an absolute path
+  via `-C`: `go test -C /full/path/to/worktree ./pkg`. NEVER assume a previous `cd`
+  left you in your worktree.
 
 ## Rebase Conflict Handling
 
