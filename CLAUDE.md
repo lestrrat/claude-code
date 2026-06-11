@@ -16,10 +16,10 @@ Claude Code configuration dotfiles. No application code — nothing to build, te
 | `docs/` | Reference docs loaded on-demand per pre-read rules table in `CLAUDE.md.global` |
 | `scripts/` | Reusable shell scripts → symlinked as `~/.claude/scripts/` |
 | `skills/` | User-invocable skills with YAML front matter (`name`, `description`) + steps |
-| `settings.json` | Permission config: `bypassPermissions` default + `ask` gates |
+| `settings.json` | Permission config: `bypassPermissions` default |
 | `setup.sh` | Symlink installer. All items keep original name except `CLAUDE.md.global` → `CLAUDE.md` |
 
 ## Editing Rules
 
 - `CLAUDE.md.global` loads into every conversation context. Keep terse, token-efficient. Detail belongs in `docs/` via pre-read rules table.
-- `settings.json` uses `defaultMode: bypassPermissions` — `allow` entries are inert there. Do NOT re-add an allowlist. Safety gates live in `permissions.ask` (enforced even in bypass mode) and skill/doc-level confirmation rules.
+- `settings.json` uses `defaultMode: bypassPermissions` — `allow` entries are inert there. Do NOT re-add an allowlist. Safety gates live in skill/doc-level confirmation rules, not the permission system.

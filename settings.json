@@ -1,10 +1,6 @@
 {
   "permissions": {
-    "defaultMode": "bypassPermissions",
-    "ask": [
-      "Bash(git push:*)",
-      "Bash(git worktree remove:*)"
-    ]
+    "defaultMode": "bypassPermissions"
   },
   "extraKnownMarketplaces": {
     "openai-codex": {
