@@ -53,9 +53,10 @@ If no parent branch given, ask user.
    Use `min(8, ceil(total_failures / max_agents))` as the target.
 5. Large packages (count > target) → split into sub-partitions by test name.
 6. Small packages → combine into one partition if combined count <= target.
-7. Final partition count: `min(len(partitions), max_agents)`.
-8. If there are more partitions than `max_agents`, merge the smallest partitions
-   until count equals `max_agents`.
+7. Dispatch at most `max_agents` partitions per wave.
+8. If there are more partitions than `max_agents`, do NOT merge them past the
+   8-test cap — dispatch the largest `max_agents` partitions now and defer the
+   rest to the next wave (retry wave re-discovers remaining failures automatically).
 
 Per partition compute:
 
