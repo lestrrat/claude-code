@@ -11,7 +11,7 @@ Create a checkpoint file that another agent can read to resume work without reco
 
 1. Identify brief topic for current session. Keep it short enough for filename slug.
 2. Resolve skill directory. Bundled script lives in `scripts/` next to this `SKILL.md`.
-3. `cd` to skill directory if needed, then run `./scripts/create-checkpoint.py "<topic>"`.
+3. From project root, run `<skill-dir>/scripts/create-checkpoint.py "<topic>"` (absolute script path). NEVER `cd` to skill directory — checkpoint must land in project `.tmp/`, not skill directory. Script defaults to `<git-toplevel>/.tmp/checkpoints`; pass `--output-dir` only to override.
 4. Read script output to get created checkpoint path.
 5. Fill checkpoint file with current state before ending turn.
 6. Tell user exact checkpoint path in final report.

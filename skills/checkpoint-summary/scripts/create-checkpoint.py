@@ -16,6 +16,20 @@ def slugify(text: str) -> str:
     return normalized[:48] or "checkpoint"
 
 
+def project_root() -> Path:
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except Exception:
+        return Path.cwd()
+    toplevel = result.stdout.strip()
+    return Path(toplevel) if toplevel else Path.cwd()
+
+
 def current_branch() -> str:
     try:
         result = subprocess.run(
@@ -73,8 +87,8 @@ def main(argv: list[str]) -> int:
     parser.add_argument("topic", help="brief session topic for filename + summary")
     parser.add_argument(
         "--output-dir",
-        default=".tmp/checkpoints",
-        help="checkpoint directory relative to current working directory",
+        default=None,
+        help="checkpoint directory (default: <git-toplevel>/.tmp/checkpoints)",
     )
     args = parser.parse_args(argv)
 
@@ -83,7 +97,7 @@ def main(argv: list[str]) -> int:
     unique_id = secrets.token_hex(4)
     topic_slug = slugify(args.topic)
 
-    output_dir = Path(args.output_dir)
+    output_dir = Path(args.output_dir) if args.output_dir else project_root() / ".tmp" / "checkpoints"
     output_dir.mkdir(parents=True, exist_ok=True)
 
     checkpoint_path = output_dir / f"{timestamp}-{unique_id}-{topic_slug}.md"

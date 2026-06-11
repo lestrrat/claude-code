@@ -15,10 +15,10 @@ Given a GitHub PR link, process Copilot review items one at a time. NEVER assume
 
 ## Workflow
 
-1. Resolve bundled scripts relative to directory containing this `SKILL.md`, not current working directory. `cd` to skill directory first when needed.
-2. Run `./scripts/fetch-review-items.sh <pr-url>` from skill directory.
-3. Read `.tmp/copilot-review-items.json` as primary worklist of unresolved items only.
-4. Inspect `.tmp/copilot-review-items.raw.json`, `.tmp/gh-pr-view.json`, and `.tmp/gh-pr-review-threads.json` when dedup or extraction needs verification.
+1. Resolve bundled scripts relative to directory containing this `SKILL.md`, not current working directory. NEVER `cd` to skill directory — script's relative `.tmp/` default would land output inside skill directory.
+2. From project root, run `<skill-dir>/scripts/fetch-review-items.sh --tmp-dir "$PROJECT/.tmp" <pr-url>` (absolute script path).
+3. Read `$PROJECT/.tmp/copilot-review-items.json` as primary worklist of unresolved items only.
+4. Inspect `$PROJECT/.tmp/copilot-review-items.raw.json`, `.tmp/gh-pr-view.json`, and `.tmp/gh-pr-review-threads.json` when dedup or extraction needs verification.
 5. Select next unhandled unresolved item from worklist. NEVER work resolved items.
 6. For current item, choose exactly one outcome before moving on:
    - valid → fix
@@ -48,7 +48,7 @@ Resolve bundled resources relative to this `SKILL.md`. Script directory = `scrip
 
 - Installed skill layout: skill directory contains `SKILL.md` + `scripts/` as siblings.
 - Repository layout: skill directory = `skills/copilot-address-reviews/`.
-- Prefer `cd` to skill directory, then run `./scripts/...`.
+- Run scripts by absolute path from project root. ALWAYS pass `--tmp-dir "$PROJECT/.tmp"` so output lands in project `.tmp/`, never skill directory.
 - NEVER assume current working directory already is skill directory.
 
 ### `scripts/fetch-review-items.sh`
