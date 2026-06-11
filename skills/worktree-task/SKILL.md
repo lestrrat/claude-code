@@ -20,8 +20,9 @@ If either is missing, ask the user.
 ## Setup
 
 1. Verify `$PARENT` exists: `git rev-parse --verify $PARENT`.
-2. Generate branch name: `task-<short-description>-<date>` derived from instructions.
-   - `<short-description>` — 2-3 word slug from instructions. e.g. `task-add-logging-20260322`.
+2. Generate branch name: `task-<short-description>-<date>-<short-id>` derived from instructions.
+   - `<short-description>` — 2-3 word slug from instructions.
+   - `<short-id>` — 4 random hex chars; avoids collisions on same-day reruns. e.g. `task-add-logging-20260322-3f2a`.
    - Path: `$PROJECT/.worktrees/<branch>`.
 3. Create worktree:
    ```
