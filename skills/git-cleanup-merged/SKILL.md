@@ -38,25 +38,26 @@ From the detection results:
 Show the user a single summary listing:
 
 - **Worktrees to remove** (path + branch)
-- **Branches to delete** (name + merge type: regular/squash)
+- **Branches to delete** (name + merge type: regular/squash). Mark squash-merged branches as requiring `-D` — `git branch -d` cannot see squash merges and always fails on them.
 - **Skipped** — merged branches/worktrees excluded due to active work, with the reason (e.g. "has uncommitted changes", "currently checked out")
 
 If nothing to clean, say so and stop.
 
 ### 4. Confirm
 
-Ask the user for a single confirmation before proceeding. Do NOT proceed without approval.
+Ask the user for a single confirmation before proceeding. Do NOT proceed without approval. This confirmation covers `-D` for branches marked squash-merged in the summary — their merge was already verified by patch-id in detection.
 
 ### 5. Execute cleanup
 
-- Remove worktrees first (`git worktree remove <path>`), then delete branches (`git branch -d <branch>`).
-- If a branch fails to delete with `-d` (e.g. git thinks it is not fully merged), ask the user whether to force-delete it with `-D`. Do NOT use `-D` without explicit user approval.
+- Remove worktrees first (`git worktree remove <path>`), then delete branches.
+- Regular merges → `git branch -d <branch>`. Squash merges → `git branch -D <branch>` (covered by step 4 confirmation).
+- If `-d` unexpectedly fails on a regular-merge branch, ask the user before using `-D`.
 - Report results after each step.
 
 ## Rules
 
 - NEVER delete `$TARGET` or `main`.
 - NEVER touch remote branches or remote tracking refs.
-- Use `-d` (safe delete) by default. Only use `-D` (force delete) if the user explicitly confirms.
+- Use `-d` (safe delete) for regular merges. `-D` for squash-merged branches is pre-approved by the step 4 confirmation; any other `-D` requires explicit user approval.
 - If a worktree removal fails, report the error and continue with the remaining items.
 - If a branch delete fails, report the error and continue with the remaining items.
