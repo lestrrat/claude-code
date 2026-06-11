@@ -16,12 +16,10 @@ Claude Code configuration dotfiles. No application code — nothing to build, te
 | `docs/` | Reference docs loaded on-demand per pre-read rules table in `CLAUDE.md.global` |
 | `scripts/` | Reusable shell scripts → symlinked as `~/.claude/scripts/` |
 | `skills/` | User-invocable skills with YAML front matter (`name`, `description`) + steps |
-| `settings.json` | Bash command permission allowlists, format: `Bash(<prefix>:*)` |
+| `settings.json` | Permission config: `bypassPermissions` default + `ask` gates |
 | `setup.sh` | Symlink installer. All items keep original name except `CLAUDE.md.global` → `CLAUDE.md` |
 
 ## Editing Rules
 
 - `CLAUDE.md.global` loads into every conversation context. Keep terse, token-efficient. Detail belongs in `docs/` via pre-read rules table.
-- New auto-approved commands → add `Bash(<command-prefix>:*)` entry to `settings.json`.
-- `settings.json` allowlist intentionally includes shell.md-banned read-only commands (`cat`, `grep`, `head`, `tail`, `ls`, `echo`) — avoids prompts when they slip through. Do NOT remove them to "enforce" shell.md.
-- Keep `git` allowlist entries scoped per subcommand. NEVER add `Bash(git -C:*)` or `Bash(git:*)` — prefix matching would auto-approve every git subcommand, including destructive ones.
+- `settings.json` uses `defaultMode: bypassPermissions` — `allow` entries are inert there. Do NOT re-add an allowlist. Safety gates live in `permissions.ask` (enforced even in bypass mode) and skill/doc-level confirmation rules.
