@@ -1,48 +1,10 @@
 {
   "permissions": {
-    "allow": [
-      "Read(.tmp/**)",
-      "Read(~/.claude/docs/**)",
-      "Bash(cat:*)",
-      "Bash(cd:*)",
-      "Bash(echo:*)",
-      "Bash(gh api:*)",
-      "Bash(gh pr view:*)",
-      "Bash(git branch --merged:*)",
-      "Bash(git cherry:*)",
-      "Bash(git diff:*)",
-      "Bash(git fetch:*)",
-      "Bash(~/.claude/scripts/git-is-squash-merged:*)",
-      "Bash(git log:*)",
-      "Bash(git ls-tree:*)",
-      "Bash(git merge-base:*)",
-      "Bash(git rev-parse:*)",
-      "Bash(git show:*)",
-      "Bash(git stash:*)",
-      "Bash(git status:*)",
-      "Bash(git worktree add:*)",
-      "Bash(git worktree list:*)",
-      "Bash(go build:*)",
-      "Bash(go clean:*)",
-      "Bash(go doc:*)",
-      "Bash(go env:*)",
-      "Bash(go list:*)",
-      "Bash(go mod:*)",
-      "Bash(go test:*)",
-      "Bash(go version:*)",
-      "Bash(go vet:*)",
-      "Bash(gofmt:*)",
-      "Bash(goimports:*)",
-      "Bash(golangci-lint:*)",
-      "Bash(grep:*)",
-      "Bash(head:*)",
-      "Bash(ls:*)",
-      "Bash(tail:*)",
-      "Bash(wc:*)",
-      "Bash(which:*)",
-      "Bash(xxd:*)"
-    ],
-    "defaultMode": "default"
+    "defaultMode": "bypassPermissions",
+    "ask": [
+      "Bash(git push:*)",
+      "Bash(git worktree remove:*)"
+    ]
   },
   "extraKnownMarketplaces": {
     "openai-codex": {
