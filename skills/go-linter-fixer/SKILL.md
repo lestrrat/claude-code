@@ -3,7 +3,7 @@ name: go-linter-fixer
 description: Run golangci-lint on Go code and fix any issues found. Use after writing or modifying Go code, or when the user explicitly requests linting.
 ---
 
-Run `golangci-lint run` on the target path (default `./...`). Respect existing `.golangci.yml`.
+Run `golangci-lint run <target> > .tmp/golangci-lint.txt 2>&1` (default target `./...`), then Read/Grep the output file. Respect existing `.golangci.yml`.
 
 ## Fix order (safest first)
 
