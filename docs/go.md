@@ -35,6 +35,7 @@ NEVER write an example as a standalone executable (`package main` + `func main()
 - Prefer early returns from functions, and early continue/break from loops/blocks
 - Prefer shorter `if` branch first. In `if/else`, put shorter/simpler clause on top.
 - Prefer removing `else` via early return/continue/break when possible.
+- Don't wrap a single function/method call in a closure when the function itself can be passed directly. Pass `foo` instead of `func() { foo() }` or `func(x T) { foo(x) }` — the wrapper adds no value and obscures the call. (A closure that adapts signatures, binds extra args, or adds logic is fine.)
 
 ## Design
 
