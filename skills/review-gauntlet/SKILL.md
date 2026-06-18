@@ -238,8 +238,16 @@ AND `ci == green` — i.e. two SATISFIED verdicts and green CI all recorded agai
      `pending` and must return green before merging.
    - Rebase requiring conflict resolution → code changed → **reset `reviews_ok` to 0**, re-enter
      Stage 2.
-5. Set status `merged`. Clean up its worktree via the `git-detect-merged` → `git-cleanup-merged`
-   skills (the branch is merged, so removal is safe).
+5. **Clean up on successful merge.** Once the merge is confirmed (`gh pr view <branch> --json state
+   --jq .state` → `MERGED`), tear down that PR's local footprint:
+   - `--delete-branch` above already removed the **remote** branch.
+   - Verify the merge with the `git-detect-merged` skill, then use `git-cleanup-merged` to remove the
+     **worktree** (`.worktrees/<branch>`) and delete the **local branch**.
+   - Set status `merged` and stop its background tasks.
+
+   This runs only after the merge is verified, and only ever touches the skill's own `fix-*`
+   worktrees/branches (per the Authorization note). Leave the worktree in place if the merge cannot
+   be confirmed — treat that as a bailout condition, not a cleanup.
 
 ---
 
