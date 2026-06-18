@@ -1,6 +1,6 @@
 ---
 name: review-gauntlet
-description: Self-looping adversarial-review-to-merge pipeline. Codex runs an adversarial review (a given area/topic, else the whole repo), findings are neutrally verified, each survivor becomes its own PR, and a per-PR review gauntlet (two consecutive independent SATISFIED verdicts, final pass over the whole diff) plus event-driven CI monitoring gate an auto-merge. Drives its own loop via ScheduleWakeup — invoke once, no /loop wrapper. Args: [area or topic]
+description: Self-looping adversarial-review-to-merge pipeline. Codex runs an adversarial review (a given area/topic, else the whole repo), findings are neutrally verified, each survivor becomes its own PR, and a per-PR review gauntlet (two independent SATISFIED verdicts on the same commit, run concurrently over the whole diff) plus event-driven CI monitoring gate an auto-merge. Drives its own loop via ScheduleWakeup — invoke once, no /loop wrapper. Args: [area or topic]
 ---
 
 # Review Gauntlet
@@ -16,7 +16,11 @@ Act on each result the moment it lands. NEVER block on a whole batch.
 `/review-gauntlet [area or topic]`
 
 - With an argument → codex reviews that area/topic.
-- Without one → codex does a **whole-repo** adversarial sweep. No pre-fan-out checkpoint; it proceeds.
+- Without one → codex does a **whole-repo** adversarial sweep. This is the intended default.
+
+**Do NOT ask the user to confirm the scope.** A no-arg invocation means whole-repo on purpose —
+proceed immediately, no "are you sure you want the whole repo?" prompt, no pre-fan-out checkpoint.
+The only thing that narrows scope is an explicit argument.
 
 Invoke it **once**. The skill drives its own loop (see "Loop control") — you do NOT wrap it in `/loop`.
 
