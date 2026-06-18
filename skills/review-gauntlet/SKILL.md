@@ -120,6 +120,13 @@ completion is its own wake.
    0/1): for each branch/PR read the live SHA, CI status, and verdict files, and refresh the ledger.
    Also re-read the `api_changes` flag from the ledger header — it governs API-change handling and
    must be consulted fresh each wake, never from memory (Constraints).
+
+   **Reconcile labels too** (idempotent, and retroactive). Ensure the labels exist
+   (`gh label create … --force`, as in Stage 1), then for every gauntlet PR — those in the ledger or
+   on a `fix-*` branch — set its label to match its **live** gate state: `gauntlet-accepted` if its
+   current HEAD holds two SATISFIED verdicts, else `gauntlet-reviewing`; add the label if it has
+   none. This is what labels PRs that a review-gauntlet run opened **before** labeling existed —
+   they simply get the right label on the next wake.
 2. **Fold in completions.** For any background task that finished (CI watch → `ci-<pr>.txt`; review →
    `review-<pr>-<n>.txt`), record the result against the SHA it ran on and act per Stage 2.
 3. **Dispatch due work — non-blocking, idempotent, bounded.** For every PR, launch only what is
@@ -195,6 +202,14 @@ If zero findings survive, report that and stop (no loop).
 
 ## Stage 1 — Fan out (one PR per finding)
 
+**Ensure the status labels exist** first (idempotent — `--force` creates or updates, safe on every
+resume):
+
+```
+gh label create gauntlet-reviewing --color FBCA04 --description "review-gauntlet: under review" --force
+gh label create gauntlet-accepted  --color 0E8A16 --description "review-gauntlet: passed two reviews" --force
+```
+
 Spawn one subagent per surviving finding (bounded ~8 per parallel block; run waves for more). Each
 subagent:
 
@@ -202,8 +217,9 @@ subagent:
 2. Implement the fix for **that finding only**, diff tight and scoped. If it would modify the public
    API surface or behavior, follow **Constraints**: under `ask`, park the finding (`awaiting-api`)
    and confirm with the user before changing anything; under `allowed`, proceed.
-3. Commit, push, open the PR off `main`: `gh pr create --base main --title ... --body ...`
-   (no "Test plan" section).
+3. Commit, push, open the PR off `main`, tagged `gauntlet-reviewing`:
+   `gh pr create --base main --label gauntlet-reviewing --title ... --body ...` (no "Test plan"
+   section).
 4. Return: finding id, branch, worktree path, PR number, one-line fix summary.
 
 For each PR: record it in `state.md` (status `in_review`, `started` = now, `attempts` += 1) and
@@ -247,7 +263,8 @@ As each verdict lands, tally it for the SHA it ran on:
   the new tip. (Because reviews are sequential, no second review was spent on this broken commit.)
 - **SATISFIED** → record it. If it's the **first** for this SHA, the next wake launches the second
   (corroborating) review on the same SHA. If it's the **second** SATISFIED on the same SHA, the
-  review gate is met for this HEAD.
+  review gate is met for this HEAD — swap the PR's label:
+  `gh pr edit <pr> --remove-label gauntlet-reviewing --add-label gauntlet-accepted`.
 
 Every pass reviews the whole `main...HEAD` diff (not just the last fix-delta), so accumulated fixes
 are always judged as one piece.
@@ -259,6 +276,12 @@ base merge — every earlier verdict is stale and `reviews_ok` drops to 0. Pinni
 than trusting yourself to remember to reset) makes the gate verifiable from git and catches commits
 you didn't initiate. A `NOT SATISFIED` invalidates the SHA's tally even before a fix lands. The two
 satisfied verdicts and green CI must all describe the *same* HEAD SHA.
+
+**Status labels mirror the review gate.** A PR carries `gauntlet-reviewing` until its current HEAD
+holds two SATISFIED verdicts, then `gauntlet-accepted`. Because any code change resets the gate, if
+an accepted PR's HEAD later advances — a CI fix, rebase, etc. — swap the label back
+(`--remove-label gauntlet-accepted --add-label gauntlet-reviewing`). Reconcile labels against the
+live gate state each wake so they never lie.
 
 ### 2b. CI (event-driven)
 

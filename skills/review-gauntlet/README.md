@@ -30,6 +30,10 @@ independent reviews on the same commit and CI is green. There's no approval step
 starting it is your sign-off — and a whole-repo run can spin up several PRs and keep going for a
 while before it's done.
 
+You can follow along on GitHub: each PR is labeled `gauntlet-reviewing` while it's working through
+the loop, and that flips to `gauntlet-accepted` once it has passed both reviews (the skill creates
+the labels if your repo doesn't have them).
+
 By default it checks with you before changing anything in your public API — exported signatures,
 formats, CLI flags, defaults, or any behavior callers depend on — so it never merges a breaking
 change behind your back. Tell it up front that breakage is fine and it'll stop asking.
