@@ -66,10 +66,10 @@ flowchart TD
     L --> M[[event loop: gate each PR]]
 
     M --> N{2 SATISFIED on current SHA?}
-    N -- no --> O[run 2 concurrent codex reviews on HEAD SHA]
-    O --> P{any NOT SATISFIED?}
-    P -- yes --> Q[scoped fix subagent: commit + push, new SHA]
-    P -- no --> M
+    N -- no --> O[run one codex review on HEAD SHA<br/>second only after the first passes]
+    O --> P{SATISFIED?}
+    P -- no --> Q[scoped fix subagent: commit + push, new SHA]
+    P -- yes --> M
     N -- yes --> R{CI status on current SHA?}
     R -- red --> S[scoped CI-fix subagent: commit + push, new SHA]
     R -- pending --> M

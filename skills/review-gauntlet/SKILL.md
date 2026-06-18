@@ -1,6 +1,6 @@
 ---
 name: review-gauntlet
-description: Self-looping adversarial-review-to-merge pipeline. Codex runs an adversarial review (a given area/topic, else the whole repo), findings are neutrally verified, each survivor becomes its own PR, and a per-PR review gauntlet (two independent SATISFIED verdicts on the same commit, run concurrently over the whole diff) plus event-driven CI monitoring gate an auto-merge. Drives its own loop via ScheduleWakeup — invoke once, no /loop wrapper. Args: [area or topic]
+description: Self-looping adversarial-review-to-merge pipeline. Codex runs an adversarial review (a given area/topic, else the whole repo), findings are neutrally verified, each survivor becomes its own PR, and a per-PR review gauntlet (two independent SATISFIED verdicts on the same commit, reviewed one at a time over the whole diff) plus event-driven CI monitoring gate an auto-merge. Drives its own loop via ScheduleWakeup — invoke once, no /loop wrapper. Args: [area or topic]
 ---
 
 # Review Gauntlet
@@ -124,8 +124,9 @@ completion is its own wake.
    `review-<pr>-<n>.txt`), record the result against the SHA it ran on and act per Stage 2.
 3. **Dispatch due work — non-blocking, idempotent, bounded.** For every PR, launch only what is
    actually due *and not already in flight* (check ground truth first, never the ledger alone):
-   - current tip has < 2 SATISFIED verdicts and no review running for that SHA → launch the two
-     review passes as **background** tasks (Stage 2a);
+   - current tip has < 2 SATISFIED verdicts and no review running for that SHA → launch **one**
+     review pass as a **background** task (one at a time per PR — the second only after the first is
+     SATISFIED; Stage 2a);
    - CI red and no fix in flight → dispatch a scoped fix subagent (Stage 2b);
    - mergeable → queue for merge.
    Cap concurrent review processes at ~8; queue the rest. **Launch, do not wait.**
@@ -221,12 +222,15 @@ are yours.
 
 ### 2a. The review gauntlet
 
-When a PR's tip (`head_sha`) has fewer than two SATISFIED verdicts and no review running for that
-SHA, the wake's dispatch step launches **two independent review passes** against it — each a
-**fresh** `codex exec` over the whole `main...HEAD` diff, no shared context, run as **background**
-tasks (their completion is a wake; the loop folds each verdict in at step 2). Independence is what
-makes two clean verdicts mean something; separate concurrent processes maximize it and halve the
-gauntlet's latency.
+Run reviews **one at a time per PR** — never two at once for the same SHA. When a PR's tip
+(`head_sha`) has fewer than two SATISFIED verdicts and no review already running for it, the wake's
+dispatch step launches **one** review pass: a **fresh** `codex exec` over the whole `main...HEAD`
+diff, no shared context, run as a **background** task (its completion is a wake; the loop folds the
+verdict in at step 2). The second, corroborating review is launched only **after** the first comes
+back SATISFIED — so a still-broken commit never burns the second review before the first has said
+"fix it". (Reviews for *different* PRs still run concurrently, up to the ~8 cap; it's only the two
+reviews for the same PR that serialize.) Each pass is a separate process, so the two verdicts stay
+independent regardless.
 
 ```
 codex exec --full-auto -C $PROJECT/.worktrees/<branch> \
@@ -236,13 +240,14 @@ codex exec --full-auto -C $PROJECT/.worktrees/<branch> \
    'VERDICT: NOT SATISFIED'."   # run in background
 ```
 
-As verdicts land, tally them for the SHA they ran on:
+As each verdict lands, tally it for the SHA it ran on:
 
-- **Any NOT SATISFIED** → dispatch a scoped fix subagent into that worktree with that review's issue
-  list; it commits + pushes → HEAD advances → all verdicts for the old SHA go stale. A later wake
-  relaunches the two passes against the new tip. (No need to wait for the other pass — a single NOT
-  SATISFIED already forces a fix; any still-running pass on the old SHA is now moot.)
-- **Both SATISFIED on the same `head_sha`** → review gate met for this HEAD.
+- **NOT SATISFIED** → dispatch a scoped fix subagent into that worktree with the issue list; it
+  commits + pushes → HEAD advances → the SHA's tally is void. A later wake starts a fresh review on
+  the new tip. (Because reviews are sequential, no second review was spent on this broken commit.)
+- **SATISFIED** → record it. If it's the **first** for this SHA, the next wake launches the second
+  (corroborating) review on the same SHA. If it's the **second** SATISFIED on the same SHA, the
+  review gate is met for this HEAD.
 
 Every pass reviews the whole `main...HEAD` diff (not just the last fix-delta), so accumulated fixes
 are always judged as one piece.
