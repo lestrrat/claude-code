@@ -30,6 +30,10 @@ independent reviews on the same commit and CI is green. There's no approval step
 starting it is your sign-off — and a whole-repo run can spin up several PRs and keep going for a
 while before it's done.
 
+By default it checks with you before changing anything in your public API — exported signatures,
+formats, CLI flags, defaults, or any behavior callers depend on — so it never merges a breaking
+change behind your back. Tell it up front that breakage is fine and it'll stop asking.
+
 It tidies up as it goes, deleting merged branches and their worktrees. If a fix just can't clear the
 bar, it retries once, then sets that one aside with a note on why and moves on rather than stalling
 everything else. When it's finished you get a short rundown: what merged, what it gave up on, and
@@ -50,7 +54,15 @@ flowchart TD
     H --> J
     I --> J[survivors = CONFIRMED or ADJUSTED]
     J --> K[Stage 1: fan out - one PR per finding]
-    K --> L[per finding: worktree off main, fix, commit, push, open PR, launch CI watch]
+    K --> L0[per finding: worktree off main, implement the fix]
+    L0 --> AB{changes public API surface or behavior?}
+    AB -- no --> L[commit, push, open PR, launch CI watch]
+    AB -- yes --> AC{api_changes flag?}
+    AC -- allowed --> L
+    AC -- ask --> AD[park finding awaiting-api, confirm with user]
+    AD --> AE{approved?}
+    AE -- yes --> L
+    AE -- no --> AF[skip - report at end]
     L --> M[[event loop: gate each PR]]
 
     M --> N{2 SATISFIED on current SHA?}

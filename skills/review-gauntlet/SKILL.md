@@ -32,6 +32,36 @@ worktrees it sets up. It does NOT touch unrelated branches, and worktree removal
 the merged-branch check (Stage 3). This scoped authorization does not relax the standing per-instance
 git confirmation rule anywhere else.
 
+## Constraints
+
+**Public API changes require user confirmation — on by default.** A fix may not modify the project's
+public API *surface or its observable behavior* without the user's say-so:
+
+- *Surface* — exported functions, types, and methods and their signatures; public constants/enums;
+  serialized formats and wire/HTTP contracts; CLI flags; config keys.
+- *Behavior* — the observable contract of the above (return/error semantics, defaults, output shape)
+  even when the signature is unchanged.
+
+Internal-only changes that leave both identical need no confirmation.
+
+Handling depends on the run's `api_changes` flag, stored in the ledger header:
+
+- **`ask` (default)** — when a fix would cross the line, do NOT make the change. Park that finding
+  (status `awaiting-api`), show the user the proposed change and what it would break, and ask whether
+  to proceed. Keep working the other findings meanwhile. Apply it only on approval; if the user
+  declines, set it aside as skipped and report it.
+- **`allowed`** — proceed without asking. Set this *only* when the user, at invocation, explicitly
+  said API breakage is acceptable (e.g. "allow API changes" / "ignore breakage").
+
+**Store the flag in the ledger and re-consult it every wake.** Derive `api_changes: ask|allowed` once
+from the invocation and record it in the ledger header. A run is long, so NEVER trust in-context
+memory for this — re-read the flag from the ledger before any API-affecting change, so the behavior
+can't drift mid-run. A blanket "yes, stop asking" from the user flips the header to `allowed`; a
+one-off "yes" approves only that finding and leaves the flag at `ask`.
+
+Backstop: when you scan a PR you built, flag any public-API change in its diff. Under `ask`, an
+unapproved API change must not merge — revert it or get approval first (grounds for `NOT SATISFIED`).
+
 ## File locations
 
 Everything under `.tmp/review-gauntlet/` (create at start of a fresh run; on resume, reuse it):
@@ -56,7 +86,12 @@ exist on which SHA). Every wake re-derives what's due from those, then refreshes
 stale or half-written ledger is self-healing — never act on it without reconciling against git/gh
 first.
 
+The file opens with a one-line run config (re-read every wake — see Constraints), then one row per
+finding:
+
 ```
+api_changes: ask        # ask | allowed (run-wide; set once from the invocation)
+
 id | slug | branch | worktree | pr | head_sha | reviews_ok | ci | attempts | started | status
 ```
 
@@ -66,7 +101,8 @@ id | slug | branch | worktree | pr | head_sha | reviews_ok | ci | attempts | sta
 - `ci` — `green` / `red` / `pending` / `none` for `head_sha`.
 - `attempts` — task attempts so far (for the retry-once bailout).
 - `started` — wall-clock start of the current attempt (for the 1-hour cap).
-- `status` — `pending` → `in_review` → `mergeable` → `merged`, or `aborted`.
+- `status` — `pending` → `in_review` → `mergeable` → `merged`, or `aborted`; plus `awaiting-api`
+  while parked for the user to approve an API-changing fix.
 
 ---
 
@@ -82,6 +118,8 @@ completion is its own wake.
 1. **Init or resume.** If neither `state.md` nor any skill-created `fix-*` branch/PR exists → first
    run: do Stage 0 then Stage 1. Otherwise **reconcile against ground truth** (do NOT redo Stage
    0/1): for each branch/PR read the live SHA, CI status, and verdict files, and refresh the ledger.
+   Also re-read the `api_changes` flag from the ledger header — it governs API-change handling and
+   must be consulted fresh each wake, never from memory (Constraints).
 2. **Fold in completions.** For any background task that finished (CI watch → `ci-<pr>.txt`; review →
    `review-<pr>-<n>.txt`), record the result against the SHA it ran on and act per Stage 2.
 3. **Dispatch due work — non-blocking, idempotent, bounded.** For every PR, launch only what is
@@ -146,7 +184,9 @@ whatever is due, and continues — no Stage 0/1 once PRs/branches already exist.
    re-verification — the shards already judged each finding. (Single-verifier mode already had the
    whole-set view, so skip this there.)
 
-4. Seed `state.md` with one row per surviving work item, status `pending`.
+4. Seed `state.md`: write the run-config header (`api_changes: allowed` only if the user explicitly
+   OK'd API breakage at invocation, else `ask`), then one row per surviving work item, status
+   `pending`.
 
 If zero findings survive, report that and stop (no loop).
 
@@ -158,7 +198,9 @@ Spawn one subagent per surviving finding (bounded ~8 per parallel block; run wav
 subagent:
 
 1. `git worktree add $PROJECT/.worktrees/<branch> -b <branch>`, `<branch>` = `fix-<short-slug>`.
-2. Implement the fix for **that finding only**. Keep the diff tight and scoped.
+2. Implement the fix for **that finding only**, diff tight and scoped. If it would modify the public
+   API surface or behavior, follow **Constraints**: under `ask`, park the finding (`awaiting-api`)
+   and confirm with the user before changing anything; under `allowed`, proceed.
 3. Commit, push, open the PR off `main`: `gh pr create --base main --title ... --body ...`
    (no "Test plan" section).
 4. Return: finding id, branch, worktree path, PR number, one-line fix summary.
@@ -275,7 +317,8 @@ When the loop exits, summarize:
 
 - **Merged** — finding id, PR number, one-line fix.
 - **Aborted** — finding id, why, pointer to `abort-<id>.md`.
-- **Skipped** — REFUTED findings, and UNCERTAIN ones the user should triage.
+- **Skipped** — REFUTED findings, UNCERTAIN ones the user should triage, and any API-changing fix the
+  user was asked about and declined (with the change each would have needed).
 - Any worktrees left for inspection.
 
 ## Rules
@@ -283,6 +326,9 @@ When the loop exits, summarize:
 - NEVER pass destructive instructions (delete, force-push, reset) to `codex exec`.
 - NEVER use `--dangerously-bypass-approvals-and-sandbox`; always `--full-auto`.
 - One finding = one tightly-scoped PR. Do not bundle unrelated fixes.
+- Public API surface/behavior changes need user confirmation by default (see Constraints). The
+  `api_changes` flag lives in the ledger header and is re-read every wake — never trust memory, never
+  auto-merge an unapproved API break.
 - Reviews are independent re-rolls: separate `codex exec` each pass, no shared context.
 - Verdicts are pinned to the reviewed HEAD SHA: any new commit (incl. rebase / base-merge / bot
   commit) makes prior verdicts stale. Re-derive from `git rev-parse HEAD`, don't trust memory.
