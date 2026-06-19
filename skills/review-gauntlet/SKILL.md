@@ -72,7 +72,7 @@ Everything under `.tmp/review-gauntlet/` (create at start of a fresh run; on res
 | `verdicts.md` | Neutral verification verdicts (which findings survive) |
 | `state.md` | Live per-finding ledger — a **cache/hint**, not the source of truth (see below) |
 | `review-<pr>-<n>.txt` | Codex's PR review output, round `n` |
-| `ci-<pr>.txt` | Latest `gh pr checks` result for a PR (written by its background watch) |
+| `ci-<pr>.txt` | Latest `gh pr checks` snapshot for a PR (re-polled after the watch, not the watch stream) |
 | `abort-<id>.md` | Detailed log for an aborted finding-task |
 
 Store ALL codex and `gh` output to `.tmp/` first, then Read/Grep it. NEVER `/tmp/`.
@@ -223,10 +223,12 @@ subagent:
 4. Return: finding id, branch, worktree path, PR number, one-line fix summary.
 
 For each PR: record it in `state.md` (status `in_review`, `started` = now, `attempts` += 1) and
-launch its background CI watch:
+launch its background CI watch. The `--watch` only **blocks** until the run settles; immediately
+after, **re-poll a fresh snapshot** into the file — that snapshot, not the watch, is what you read:
 
 ```
-gh pr checks <pr> --watch > .tmp/review-gauntlet/ci-<pr>.txt   # run in background
+# run in background. ';' (not '&&') so the re-poll ALWAYS runs, even when --watch exits non-zero on failure
+gh pr checks <pr> --watch ; gh pr checks <pr> > .tmp/review-gauntlet/ci-<pr>.txt
 ```
 
 The fix subagents only produce the fix + PR. They do NOT run reviews, watch CI, or merge — those
@@ -285,14 +287,22 @@ live gate state each wake so they never lie.
 
 ### 2b. CI (event-driven)
 
-Each PR has a background `gh pr checks --watch` writing `ci-<pr>.txt`. When a watch completes, the
-result arrives as a wake; read the file and update `ci`:
+Each PR has a background task that waits on `gh pr checks --watch`, then **re-polls** `gh pr checks
+<pr>` into `ci-<pr>.txt`. The watch only blocks; the re-polled snapshot is the source of truth. When
+the task completes, a wake reads the file and decides `ci` **from the file's contents — never from
+the watch exit code**:
 
-- **green** → CI gate met for the current HEAD.
-- **red** → diagnose from the check logs, dispatch a scoped CI-fix subagent into that worktree. Its
-  fix commits + pushes → code changed → **reset `reviews_ok` to 0**, relaunch the watch, re-enter 2a.
+- **green** → ONLY if the snapshot shows **zero failing lines AND zero pending lines** and the
+  expected checks are actually present. `gh pr checks --watch` can exit 0 while checks are still
+  pending or have not yet registered, so a clean exit is not evidence of green.
+- **pending** → any line still pending, or the expected checks haven't appeared yet → not green;
+  leave `ci = pending` and re-poll on a later wake (relaunch the watch if it already exited).
+- **red** → any failing line → diagnose from the check logs, dispatch a scoped CI-fix subagent into
+  that worktree. Its fix commits + pushes → code changed → **reset `reviews_ok` to 0**, relaunch the
+  watch, re-enter 2a.
 
-Every CI failure must be handled; never merge over a red or pending check.
+Every CI failure must be handled; never merge over a red or pending check, and never infer green from
+the watch's exit code alone — always confirm against the re-polled snapshot.
 
 ---
 
@@ -363,4 +373,6 @@ When the loop exits, summarize:
 - Never redo Stage 0/1 when `state.md` already exists — that path is resume-only.
 - If codex exec fails or times out, retry once; if it still fails, fall back to reviewing that PR
   yourself with an equally adversarial pass, and note it in the report.
+- CI status comes from a re-polled `gh pr checks` snapshot with **zero fail AND zero pending lines** —
+  never from the `--watch` exit code (it can exit 0 on pending/unregistered checks). No green, no merge.
 - No "Test plan" section in PR bodies.
