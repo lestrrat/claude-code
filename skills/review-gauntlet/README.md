@@ -18,10 +18,19 @@ files the fixes, defends them through repeated review rounds, waits for CI, and 
 ```
 /review-gauntlet                 # review the whole repo
 /review-gauntlet auth & sessions # review just that area or topic
+/review-gauntlet --new           # force a brand-new run, even over an old one
 ```
 
 Run it **once** — that's it. It schedules its own follow-ups and keeps working until everything is
 resolved; you don't need to keep it open or re-run it.
+
+If you do come back and run it again later, it does the sensible thing: if a run is still in
+progress it picks up where it left off, and if the last run already finished it asks whether you
+want to start a fresh one rather than either restarting silently or insisting everything's already
+fixed. A fresh run isn't a blind redo — it remembers what earlier runs learned (which findings it
+gave up on, which it set aside as your call, and which it judged not worth fixing) so it can pick up
+the unfinished threads and not re-litigate the same non-issues. Add `--new` (or just say "start a
+fresh run") to force a new run immediately without being asked.
 
 ## What to expect
 
@@ -47,7 +56,13 @@ anything it left for you to weigh in on.
 
 ```mermaid
 flowchart TD
-    A([invoke review-gauntlet]) --> B{area or topic given?}
+    A([invoke review-gauntlet]) --> A1{live work, finished run, or --new?}
+    A1 -- live work --> A2[resume: reconcile + continue loop] --> M
+    A1 -- finished run --> A3{start a new run?}
+    A3 -- no --> A4([prior final report])
+    A3 -- yes --> B
+    A1 -- nothing yet / --new --> B
+    B{area or topic given?}
     B -- yes --> C[codex reviews that area]
     B -- no --> D[codex whole-repo sweep]
     C --> E[neutral verification pass]
@@ -84,7 +99,7 @@ flowchart TD
     U --> V[cleanup worktree + local branch, mark merged]
     V --> W{all PRs merged or aborted?}
     W -- no --> M
-    W -- yes --> X([final report])
+    W -- yes --> X[write carryover ledger + final report] --> X2([done])
 
     M -. 1h cap exceeded .-> Y{first attempt?}
     Y -. yes .-> Z[retry once in fresh worktree]
@@ -97,4 +112,8 @@ flowchart TD
 
 - It uses Codex as the reviewer, so Codex CLI needs to be available.
 - It works through GitHub PRs via the `gh` CLI, so the repo needs a GitHub remote.
+- It keeps a small `.review-gauntlet/history.md` at the repo root (git-ignored) to remember what past
+  runs learned. That's the memory a fresh run carries over. Each fresh run also tidies that file,
+  dropping entries that no longer apply to the current code — and when it isn't sure an entry is
+  safe to drop, it asks you first rather than guessing.
 - Full mechanics live in [`SKILL.md`](./SKILL.md).

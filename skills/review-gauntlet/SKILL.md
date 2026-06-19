@@ -24,6 +24,11 @@ The only thing that narrows scope is an explicit argument.
 
 Invoke it **once**. The skill drives its own loop (see "Loop control") — you do NOT wrap it in `/loop`.
 
+**Fresh-run signal.** An explicit `--new` flag (or a phrase like "fresh run" / "start over") forces a
+brand-new run even when a prior run's state is still around — see "Loop control" step 1 for exactly
+when it applies and how a finished prior run is handled. The arg, if any, is still the scope:
+`/review-gauntlet --new auth` is a fresh whole-area run on `auth`.
+
 ## Authorization note
 
 Invoking this skill is the user's explicit, per-invocation authorization for the git operations it
@@ -77,6 +82,12 @@ Everything under `.tmp/review-gauntlet/` (create at start of a fresh run; on res
 
 Store ALL codex and `gh` output to `.tmp/` first, then Read/Grep it. NEVER `/tmp/`.
 
+**Durable cross-run knowledge lives outside `.tmp/`.** `.tmp/` may be wiped between runs, so the
+one thing a *new* run needs to remember from old ones — the carryover ledger — is kept at the repo
+root in `.review-gauntlet/history.md` (git-ignored; add the entry to `.gitignore` if missing). It
+survives `.tmp` cleanup. Everything else stays ephemeral under `.tmp/review-gauntlet/`. See
+"Fresh runs and carryover".
+
 ### The ledger — `state.md`
 
 One row per surviving finding. It is a **cache**, not the authoritative state — **ground truth is
@@ -115,11 +126,27 @@ completion is its own wake.
 
 **Every wake — reconcile, dispatch, reschedule:**
 
-1. **Init or resume.** If neither `state.md` nor any skill-created `fix-*` branch/PR exists → first
-   run: do Stage 0 then Stage 1. Otherwise **reconcile against ground truth** (do NOT redo Stage
-   0/1): for each branch/PR read the live SHA, CI status, and verdict files, and refresh the ledger.
-   Also re-read the `api_changes` flag from the ledger header — it governs API-change handling and
-   must be consulted fresh each wake, never from memory (Constraints).
+1. **Init, resume, or start fresh.** Decide on **liveness**, not on whether `state.md` exists. Live
+   work = any open skill-created `fix-*` PR/branch **OR** any non-terminal ledger row (`pending` /
+   `in_review` / `mergeable` / `awaiting-api`). Three cases:
+
+   - **Live work exists → resume.** **Reconcile against ground truth** (do NOT redo Stage 0/1): for
+     each branch/PR read the live SHA, CI status, and verdict files, and refresh the ledger. Also
+     re-read the `api_changes` flag from the ledger header — it governs API-change handling and must
+     be consulted fresh each wake, never from memory (Constraints). This is also the path every
+     `ScheduleWakeup` / background-completion wake takes.
+   - **No state at all (no `state.md`, no `fix-*` branch/PR) → first run.** Do Stage 0 then Stage 1.
+   - **`state.md` exists but is fully terminal — every row `merged`/`aborted`, no open `fix-*` PR →
+     the previous run is finished.** Do **not** silently exit "all fixed" (the old bug) and do **not**
+     silently restart. **Ask the user** whether to start a new run — e.g. "The previous
+     review-gauntlet run finished (N merged, M aborted). Start a new run?" On yes, start a fresh run
+     **with carryover** (see "Fresh runs and carryover"). On no, emit the prior run's final report and
+     stop. This prompt is the *only* wake that asks the user about scope.
+
+   **The `--new` fresh-run signal short-circuits the above:** if the user invoked with `--new` (or
+   "fresh run" / "start over"), start a fresh run with carryover immediately, regardless of liveness —
+   no prompt. Live work, if any, is handled per "Fresh runs and carryover" (open PRs are left intact;
+   the new run is a new sweep, and live state is archived into the carryover ledger first).
 
    **Reconcile labels too** (idempotent, and retroactive). Ensure the labels exist
    (`gh label create … --force`, as in Stage 1), then for every gauntlet PR — those in the ledger or
@@ -143,7 +170,14 @@ completion is its own wake.
    - Any non-terminal PR remains → set a `ScheduleWakeup` heartbeat (`prompt: "/review-gauntlet
      <args>"`, delay ~3–4 min, cache-warm) as a fallback; background completions will usually wake
      you sooner. Return.
-   - All PRs `merged` or `aborted` → emit the final report and **do not reschedule**. The loop ends.
+   - All PRs `merged` or `aborted` → **distill the run into the carryover ledger** (append a run
+     block to `.review-gauntlet/history.md` — merged fixes, aborted findings + why, declined-API
+     findings, and the REFUTED/UNCERTAIN sets; see "Fresh runs and carryover"), emit the final report,
+     and **do not reschedule**. The loop ends. **Leave `.tmp/review-gauntlet/` in place** (do NOT
+     archive it here) — the terminal `state.md` is what lets the next manual invocation detect a
+     *finished* run and take the "ask the user" branch in step 1 instead of the old silent exit. (If a
+     stale heartbeat fires after exit, it harmlessly re-hits the finished-run branch rather than a
+     blank "first run".) Archiving of the old `.tmp` happens only when a fresh run actually starts.
 
 **Idempotency is the load-bearing property.** Because every wake re-derives from git/gh and launches
 only work not already in flight, a relaunch after a killed session — or two completions landing close
@@ -153,8 +187,98 @@ anyway. The agent is also single-threaded per turn, so wake *decisions* never tr
 in-flight tasks do.
 
 **Resume after a killed session:** in-flight background tasks die with the session, but nothing
-authoritative is lost. A fresh `/review-gauntlet <args>` reconciles against git/gh, relaunches
-whatever is due, and continues — no Stage 0/1 once PRs/branches already exist.
+authoritative is lost. A new `/review-gauntlet <args>` invocation (without `--new`) sees the live
+work, reconciles against git/gh, relaunches whatever is due, and continues — no Stage 0/1 once
+PRs/branches already exist. (Resume vs. fresh run is decided in Loop control step 1.)
+
+---
+
+## Fresh runs and carryover
+
+A **fresh run** is a new Stage 0/1 cycle started when a prior run already happened — triggered either
+by the user answering "yes" to the finished-run prompt (Loop control step 1) or by an explicit
+`--new`. It is *not* a resume: it does a brand-new codex sweep. What makes it more than a blind
+re-run is **carryover** — it inherits what earlier runs already learned.
+
+### The carryover ledger — `.review-gauntlet/history.md`
+
+A durable, git-ignored, append-only log at the repo root (NOT under `.tmp/`, which can be wiped).
+Each finished run appends one block; a fresh run reads the **whole file** so knowledge compounds
+across many runs. A block records:
+
+- **merged** — finding slug + one-line fix, per PR that shipped.
+- **aborted** — finding slug + why it couldn't clear the bar (pointer to its `abort-<id>.md` if still
+  present).
+- **declined-api** — findings parked under `ask` that the user declined, with the change they'd have
+  needed.
+- **refuted** — findings the verification pass rejected as non-issues, with a one-line reason.
+- **uncertain** — findings left for the user to triage.
+
+If the file or `.review-gauntlet/` dir doesn't exist, create it (and add `.review-gauntlet/` to the
+repo's `.gitignore` if it's not already ignored). "carry over knowledge from previous runs, **if
+any**" — when there's no history file, a fresh run is just a normal first run.
+
+### Pruning the ledger
+
+The ledger grows append-only during runs, so **prune it regularly** — at the start of every fresh
+run (right before feeding carryover into Stage 0), and any time the user asks. The goal is to drop
+entries that **no longer apply to the current code**, so stale context can't mislead the new sweep.
+Check each entry against current `main`:
+
+- **refuted / aborted / uncertain** whose cited `file:line` no longer exists, or whose code has
+  materially changed since — the finding as recorded can't still hold. A changed refuted/aborted site
+  should be *re-judged fresh* by the new sweep, not carried as a settled verdict, so drop the stale
+  entry.
+- **declined-api** whose referenced surface no longer exists, or that has since shipped — moot.
+- **merged** entries are historical record and cheap; keep them unless the user wants them condensed.
+
+**Confirm before deleting when unsure — this is the load-bearing rule.** Delete outright *only*
+entries that are unambiguously moot: the exact cited site is gone and there's nothing to re-judge.
+For anything you're not certain about — the site moved but the concern might still stand, an aborted
+finding you can't confirm was resolved, a declined-api you're unsure shipped — **do NOT delete it.
+List those candidates with why each looks stale and ask the user** which to remove. Never silently
+drop an entry you're uncertain about; a wrongly-pruned `refuted` re-opens a settled non-issue, and a
+wrongly-pruned `aborted` loses a real unfinished thread.
+
+Note what was pruned (and what the user kept) so the decision is auditable on the next run.
+
+A run is distilled into the ledger **exactly once**, at whichever of these happens to it:
+
+- **Normal exit** (all PRs terminal) — Loop control step 5 appends the finished run's block. The
+  finished-run "ask the user → yes" path reuses *that* block; it does not re-distill.
+- **Pre-empted by `--new` while still live** — the fresh-run start (step 1 below) snapshots the
+  not-yet-finished run before abandoning it.
+
+### Starting a fresh run
+
+1. **Distill/snapshot the prior `.tmp` state, then archive it.** If the prior run exited normally its
+   block is already in the ledger — skip straight to archiving. If you're pre-empting still-live work
+   under `--new`, first append the current `state.md` rows to a history block as-is so nothing is
+   lost. Either way, then archive `.tmp/review-gauntlet/` to a sibling `.tmp/review-gauntlet-<run-id>/`
+   (a timestamp works as `<run-id>`) so the new run gets a clean `.tmp/review-gauntlet/`. **Leave open
+   `fix-*` PRs and their worktrees intact** — a fresh run does not close or merge them; it just stops
+   driving them. (If the user wants those abandoned, that's a separate explicit ask.)
+2. **Read the full carryover ledger, then prune it** (drop entries no longer applicable to current
+   `main`; confirm any uncertain deletions with the user — see "Pruning the ledger"). Feed the pruned
+   ledger into Stage 0 (below).
+3. Proceed through Stage 0 → Stage 1 → the loop as normal, on a clean `.tmp/review-gauntlet/`.
+
+### How carryover shapes Stage 0
+
+- **Re-surface unresolved items.** Seed the verification pass with the prior **aborted**,
+  **declined-api**, and **uncertain** findings as priority candidates: if the new codex sweep
+  re-finds them (or they're still live in the code), they survive into the ledger ahead of net-new
+  findings rather than being silently forgotten. A declined-api finding stays parked under `ask`
+  unless the user has since OK'd it.
+- **Suppress known false-positives.** Give the neutral verifier the prior **refuted** set so it
+  doesn't re-litigate the same non-issues — a finding matching a prior refutation is dropped unless
+  the code at that site has since changed (in which case re-judge it fresh).
+- **Dedup already-merged fixes.** Give the verifier the prior **merged** set so it doesn't re-propose
+  work already shipped. (Usually moot — the merged fix changed the code — but it catches a sweep that
+  re-flags the same site from a different angle.)
+
+Carryover is advisory context for the verifier, never an auto-accept or auto-reject: every finding
+still goes through normal CONFIRMED/ADJUSTED/REFUTED/UNCERTAIN judgement.
 
 ---
 
@@ -172,9 +296,16 @@ whatever is due, and continues — no Stage 0/1 once PRs/branches already exist.
    For a whole-repo sweep, mirror the tiering strategy in the `adversarial-review` skill if the
    surface is large.
 
+   **On a fresh run, load carryover first** (`.review-gauntlet/history.md`, pruned of stale entries
+   per "Pruning the ledger") and pass the prior unresolved items (aborted / declined-api / uncertain)
+   to the reviewer as known areas of interest, so a re-find is recognized rather than treated as
+   net-new. See "Fresh runs and carryover".
+
 2. **Neutral verification pass.** Audit every finding with the `adversarial-review` Phase 2 scheme —
    `CONFIRMED` / `ADJUSTED` / `REFUTED` / `UNCERTAIN`, biased toward refuting — into
-   `.tmp/review-gauntlet/verdicts.md`. Scale by finding count:
+   `.tmp/review-gauntlet/verdicts.md`. On a fresh run, hand the verifier the carryover sets (refuted
+   to suppress, merged to dedup, unresolved to prioritize) per "Fresh runs and carryover". Scale by
+   finding count:
    - **≤ 10 findings** → one fresh `Explore` subagent audits them all (it sees the whole set, so no
      cross-finding gap).
    - **> 10 findings** → shard into chunks of 5–8 and spawn one `Explore` subagent per chunk in
@@ -359,6 +490,9 @@ When the loop exits, summarize:
   user was asked about and declined (with the change each would have needed).
 - Any worktrees left for inspection.
 
+The same outcomes are appended to the durable carryover ledger (`.review-gauntlet/history.md`) on
+exit (Loop control step 5), so the next fresh run inherits them.
+
 ## Rules
 
 - NEVER pass destructive instructions (delete, force-push, reset) to `codex exec`.
@@ -370,7 +504,16 @@ When the loop exits, summarize:
 - Reviews are independent re-rolls: separate `codex exec` each pass, no shared context.
 - Verdicts are pinned to the reviewed HEAD SHA: any new commit (incl. rebase / base-merge / bot
   commit) makes prior verdicts stale. Re-derive from `git rev-parse HEAD`, don't trust memory.
-- Never redo Stage 0/1 when `state.md` already exists — that path is resume-only.
+- Resume vs. fresh run is decided by **liveness**, not by `state.md` existing: live work → resume
+  (no Stage 0/1); a finished prior run → ask the user before a fresh run; `--new` → fresh run with
+  carryover (Loop control step 1). A finished run must never silently exit "all fixed" or silently
+  restart.
+- A fresh run carries over prior knowledge from `.review-gauntlet/history.md` (refuted to suppress,
+  unresolved to re-surface, merged to dedup) but still judges every finding fresh — carryover is
+  advisory, never auto-accept/reject.
+- Prune `.review-gauntlet/history.md` at every fresh run: drop only entries unambiguously moot against
+  current `main`; for anything uncertain, list it and ask the user before deleting. Never silently
+  prune an entry you're unsure about.
 - If codex exec fails or times out, retry once; if it still fails, fall back to reviewing that PR
   yourself with an equally adversarial pass, and note it in the report.
 - CI status comes from a re-polled `gh pr checks` snapshot with **zero fail AND zero pending lines** —
