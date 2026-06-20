@@ -156,14 +156,21 @@ completion is its own wake.
    they simply get the right label on the next wake.
 2. **Fold in completions.** For any background task that finished (CI watch → `ci-<pr>.txt`; review →
    `review-<pr>-<n>.txt`), record the result against the SHA it ran on and act per Stage 2.
-3. **Dispatch due work — non-blocking, idempotent, bounded.** For every PR, launch only what is
-   actually due *and not already in flight* (check ground truth first, never the ledger alone):
+3. **Dispatch due work — non-blocking, idempotent, bounded.** Launch only what is actually due *and
+   not already in flight* (check ground truth first, never the ledger alone). This owns **both** the
+   initial fan-out and all downstream work — there is no separate batched fan-out phase:
+   - any `pending` finding with no PR yet, while fewer than ~8 fix subagents are in flight → launch
+     its fix subagent (Stage 1). This **backfills continuously**: as each fix subagent finishes and a
+     slot frees, pull the next `pending` finding in — never wait for a whole group to drain before
+     starting more.
    - current tip has < 2 SATISFIED verdicts and no review running for that SHA → launch **one**
      review pass as a **background** task (one at a time per PR — the second only after the first is
      SATISFIED; Stage 2a);
    - CI red and no fix in flight → dispatch a scoped fix subagent (Stage 2b);
    - mergeable → queue for merge.
-   Cap concurrent review processes at ~8; queue the rest. **Launch, do not wait.**
+   Treat ~8 as a **rolling concurrency cap**, not a wave size: keep up to ~8 fix subagents and ~8
+   review processes in flight, refilling each free slot immediately; queue the rest. **Launch, do not
+   wait — never barrier on a group of findings before dispatching the next.**
 4. **Merge** at most one queued PR this wake, serialized, after re-confirming its gate against the
    live SHA (Stage 3).
 5. **Reschedule or exit.**
@@ -341,8 +348,13 @@ gh label create gauntlet-reviewing --color FBCA04 --description "review-gauntlet
 gh label create gauntlet-accepted  --color 0E8A16 --description "review-gauntlet: passed two reviews" --force
 ```
 
-Spawn one subagent per surviving finding (bounded ~8 per parallel block; run waves for more). Each
-subagent:
+Spawn one subagent per surviving finding, up to a **rolling cap of ~8 in flight** — NOT in barrier
+waves. Launch the first ~8 immediately, then refill: the moment any fix subagent finishes (and its PR
+enters the gates), pull the next `pending` finding into the freed slot. Never wait for a group of ~8
+to fully drain before starting more — a small remainder of one group must not stall the rest of the
+backlog. From the first wake onward this refilling is owned by Loop-control step 3 (the same dispatch
+that launches reviews/CI fixes/merges), so initial fan-out and resume use one identical slot-driven
+path; this Stage 1 description is just what each fix subagent does. Each subagent:
 
 1. `git worktree add $PROJECT/.worktrees/<branch> -b <branch>`, `<branch>` = `fix-<short-slug>`.
 2. Implement the fix for **that finding only**, diff tight and scoped. If it would modify the public
@@ -498,6 +510,9 @@ exit (Loop control step 5), so the next fresh run inherits them.
 - NEVER pass destructive instructions (delete, force-push, reset) to `codex exec`.
 - NEVER use `--dangerously-bypass-approvals-and-sandbox`; always `--full-auto`.
 - One finding = one tightly-scoped PR. Do not bundle unrelated fixes.
+- Fan-out is a **rolling cap (~8 in flight), never a barrier wave**: backfill each freed slot with the
+  next `pending` finding immediately. Never let a draining group of findings stall the backlog —
+  Loop-control step 3 owns this refill for both initial fan-out and resume.
 - Public API surface/behavior changes need user confirmation by default (see Constraints). The
   `api_changes` flag lives in the ledger header and is re-read every wake — never trust memory, never
   auto-merge an unapproved API break.
