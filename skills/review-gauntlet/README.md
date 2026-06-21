@@ -56,12 +56,12 @@ anything it left for you to weigh in on.
 
 ```mermaid
 flowchart TD
-    A([invoke review-gauntlet]) --> A1{live work, finished run, or --new?}
+    A([invoke review-gauntlet]) --> A1{"live work, finished run, or --new?"}
     A1 -- live work --> A2[resume: reconcile + continue loop] --> M
     A1 -- finished run --> A3{start a new run?}
     A3 -- no --> A4([prior final report])
     A3 -- yes --> B
-    A1 -- nothing yet / --new --> B
+    A1 -->|"nothing yet / --new"| B
     B{area or topic given?}
     B -- yes --> C[codex reviews that area]
     B -- no --> D[codex whole-repo sweep]
