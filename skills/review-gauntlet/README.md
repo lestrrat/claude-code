@@ -110,7 +110,10 @@ flowchart TD
 
 ## Good to know
 
-- It uses Codex as the reviewer, so Codex CLI needs to be available.
+- It uses Codex as the reviewer, so Codex CLI should be available. If Codex can't return a verdict
+  because of a system problem — quota or rate limits, auth, a timeout — it retries once and then does
+  the equivalent review with its own subagents, so a transient Codex outage slows a run down but
+  doesn't stall it.
 - It works through GitHub PRs via the `gh` CLI, so the repo needs a GitHub remote.
 - It keeps a small `.review-gauntlet/history.md` at the repo root (git-ignored) to remember what past
   runs learned. That's the memory a fresh run carries over. Each fresh run also tidies that file,
