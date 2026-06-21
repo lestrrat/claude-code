@@ -289,6 +289,28 @@ still goes through normal CONFIRMED/ADJUSTED/REFUTED/UNCERTAIN judgement.
 
 ---
 
+## Codex fallback — quota / system errors
+
+`codex exec` is the default reviewer, but it can fail in a way that yields **no usable verdict**:
+quota/rate-limit exhaustion, auth failures, timeouts, or other system errors. Distinguish this from a
+real review — a codex run that returns an actual finding list or a `VERDICT: …` line is a *result*,
+act on it. A *failure* is the absence of a verdict.
+
+When codex can't deliver a verdict, retry once. If it still can't, **do the equivalent work with your
+own subagents** rather than stalling, looping on codex, or skipping the gate — then note in the final
+report that the pass ran on the Claude-subagent fallback.
+
+- **Stage 0 (adversarial review)** → run the adversarial sweep with your own subagents: follow the
+  `adversarial-review` skill over the same scope (tier/shard it for a large surface, as Stage 0
+  already describes), writing findings to `findings-raw.md` in the same shape codex would have. The
+  neutral verification pass (Stage 0 step 2) is unchanged.
+- **Stage 2a (per-PR review)** → spawn a **fresh** subagent to review the whole `main...HEAD` diff
+  with an equally adversarial pass, ending in exactly one `VERDICT: SATISFIED` / `VERDICT: NOT
+  SATISFIED` line. Each fallback pass is still an independent re-roll in its own subagent/context, so
+  the two-independent-SATISFIED gate holds exactly as it does with codex.
+
+This is a fallback for *system* failure, not a preference — use codex whenever it can actually run.
+
 ## Stage 0 — Review and verify
 
 1. Run the codex adversarial review. Scope = the arg if given, else the whole repo.
@@ -301,7 +323,9 @@ still goes through normal CONFIRMED/ADJUSTED/REFUTED/UNCERTAIN judgement.
    ```
 
    For a whole-repo sweep, mirror the tiering strategy in the `adversarial-review` skill if the
-   surface is large.
+   surface is large. If codex can't produce findings (quota/rate-limit, auth, timeout, or other
+   system error — see "Codex fallback"), retry once, then run this sweep with your own subagents into
+   `findings-raw.md` and continue with verification as normal.
 
    **On a fresh run, load carryover first** (`.review-gauntlet/history.md`, pruned of stale entries
    per "Pruning the ledger") and pass the prior unresolved items (aborted / declined-api / uncertain)
@@ -392,6 +416,12 @@ back SATISFIED — so a still-broken commit never burns the second review before
 "fix it". (Reviews for *different* PRs still run concurrently, up to the ~8 cap; it's only the two
 reviews for the same PR that serialize.) Each pass is a separate process, so the two verdicts stay
 independent regardless.
+
+If a pass's `codex exec` can't return a verdict (quota/rate-limit, auth, timeout, or other system
+error — see "Codex fallback"), retry it once, then run that pass as a **fresh subagent** reviewing the
+whole `main...HEAD` diff and ending in the same `VERDICT:` line. A subagent fallback pass counts
+toward the two-independent-SATISFIED gate exactly like a codex pass — it's an independent re-roll in
+its own context.
 
 ```
 codex exec --full-auto -C $PROJECT/.worktrees/<branch> \
@@ -529,8 +559,10 @@ exit (Loop control step 5), so the next fresh run inherits them.
 - Prune `.review-gauntlet/history.md` at every fresh run: drop only entries unambiguously moot against
   current `main`; for anything uncertain, list it and ask the user before deleting. Never silently
   prune an entry you're unsure about.
-- If codex exec fails or times out, retry once; if it still fails, fall back to reviewing that PR
-  yourself with an equally adversarial pass, and note it in the report.
+- If `codex exec` can't deliver a verdict (quota/rate-limit, auth, timeout, or other system error —
+  *not* a real finding list / `VERDICT:` line), retry once, then do the equivalent work with your own
+  subagents: the Stage 0 adversarial sweep, or an independent fresh-subagent pass in Stage 2a. The
+  gate is unchanged — note any fallback pass in the report. See "Codex fallback".
 - CI status comes from a re-polled `gh pr checks` snapshot with **zero fail AND zero pending lines** —
   never from the `--watch` exit code (it can exit 0 on pending/unregistered checks). No green, no merge.
 - No "Test plan" section in PR bodies.
