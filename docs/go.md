@@ -28,6 +28,19 @@ NEVER write an example as a standalone executable (`package main` + `func main()
 - Temp files when required: `os.MkdirTemp(".", ".tmp-<topic>-*")` + `defer os.RemoveAll(dir)`.
 - Verify: `go test ./examples/` + `go vet ./examples/` must pass.
 
+## File Naming & Layout
+
+Defaults, not hard rules — deviate when a clearer structure fits. The build-constraint suffix rule is the one hard edge.
+
+- Name files by responsibility. Filename = snake_case of the concern owned (`tree_builder.go`, `parser_entity_ref.go`). snake_case only — NEVER camelCase or hyphens.
+- Consolidate related declarations into one file. Avoid one-file-per-micro-topic sprawl (`topic_one.go … topic_n.go`). Avoid files <~50 lines unless the file owns one cohesive concept.
+- Soft size cap: handwritten source ~500–1000 lines → split by responsibility past ~1000; test files up to ~2000 → split by production-code area past that. Same figures as `go-package-reorg`/`go-test-reorg` skills.
+- `_test.go` sits beside the file it tests, same base name: `foo.go` → `foo_test.go`. When one concern's tests outgrow the cap, split by aspect (`foo_<aspect>_test.go`) — NEVER by authoring batch (`coverage_round2_test.go`).
+- Avoid layer/authoring-order suffixes — `_core`, `_impl`, `_base`, `_misc`, `_helpers`, `_internal`, `_v2`, `_round2`. They name how the file was built, not what it owns → rename to the responsibility, or merge into the file they back.
+- Avoid grab-bag filenames — `util.go`/`misc.go`/`helpers.go`/`common.go`. Name by responsibility.
+- OS/arch suffixes (`_linux.go`, `_amd64.go`, `_windows.go`, …) are RESERVED by the toolchain for build constraints. NEVER use as topic separators — they silently change which builds compile the file.
+- A filename pass can't catch every smell — a well-named, well-sized file may still hold two concerns. Verdict from declarations inside, not from `ls`. Procedure: `go-package-reorg` skill.
+
 ## Style
 
 - Do not use named return values.

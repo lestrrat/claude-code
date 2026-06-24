@@ -19,6 +19,7 @@ Read all `.go` files in the target directory. For each file, identify:
 
 - **Dominant responsibility** — from actual types/functions/methods/tests inside, NOT from filename.
 - **Content/name mismatch** — filename does not reflect what the file actually contains.
+- **Suffix smell** — `_core`/`_impl`/`_base`/`_misc`/`_helpers`/`_v2`/`_round2` name layering or authoring order, not responsibility. Flag for rename or merge regardless of size.
 - **Size** — flag files over ~1000 lines (too large) or under ~50 lines (candidate for merging).
 - **Generated files** — files with `// Code generated` headers or `//go:generate` directives.
 - **Test files** — `*_test.go` files and what they actually test.
@@ -31,6 +32,7 @@ Design a new file layout around coherent responsibility groups.
 
 - Align filename with dominant responsibility of code inside.
 - Prefer themed filenames: `parser_element.go`, `writer_escape.go`, `tree_builder.go` — not `misc.go`, `stuff.go`, `util.go`.
+- Rename layer/authoring-order suffixes (`_core`, `_impl`, `_base`, `_round2`) to the responsibility, or merge into the file they back.
 - Keep naming consistent across sibling files.
 
 ### Sizing rules
