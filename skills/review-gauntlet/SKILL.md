@@ -458,6 +458,45 @@ an accepted PR's HEAD later advances — a CI fix, rebase, etc. — swap the lab
 (`--remove-label gauntlet-accepted --add-label gauntlet-reviewing`). Reconcile labels against the
 live gate state each wake so they never lie.
 
+### 2a-deep. Deep structured pass — break a whack-a-mole
+
+Watch the **shape** of successive `NOT SATISFIED` findings on one PR, not just their content. When
+each finding is a different *instance of one underlying pattern* — siblings in some finite space the
+code must cover exhaustively — the reviewer's lens is incomplete and per-finding fixes whack-a-mole:
+each round closes one instance, the next round finds another. Tell-tale sign: every fix looks like
+"add the same kind of handling to one more case."
+
+**Trigger** → ≥2–3 rounds whose findings are siblings in one structured space (same
+function/concept, different instance). Stop reactive per-finding patching; close the whole space at
+once:
+
+1. **Name the space and enumerate it.** What is the finite set the code must cover, and what are its
+   axes? (Could be: the set of cases/inputs/states a function must handle; a `{variant} × {code-path}`
+   grid; both directions of a round-trip or other symmetric relation; every call site of one
+   operation that must behave identically. The axes are domain-specific — derive them from the
+   findings, don't assume a fixed shape.)
+2. **Dispatch a dedicated analysis subagent** — read-only, in a *fresh* worktree at the PR tip (NOT
+   the fix worktree). It ENUMERATES every cell, marks each `HANDLED` / `GAP` / `N-A` with a one-line
+   why, and returns a prioritized gap list — each gap with `file:line` + a minimal repro confirmed by
+   a throwaway test (deleted before it reports). Emit the enumeration as a literal table.
+3. **One batch-fix round** for all confirmed gaps. Factor the shared logic into ONE helper/path so the
+   cells can't diverge again. Add a test per cell.
+4. **Resume the gauntlet** (two independent SATISFIED) on the batched result.
+
+Caveats:
+
+- A cell's verdict can be **wrong** — the analysis is a hypothesis (e.g. "handled by X" when X doesn't
+  actually cover it). The adversarial gauntlet still arbitrates; the deep pass *accelerates*
+  convergence, it does NOT replace the gate. Re-feed any reviewer-found gap into the enumeration.
+- Completeness = no false-positive AND no false-negative across the space. The pass surfaces both: an
+  over-strict path that rejects valid cells is as much a gap as a missing one.
+- A whole AXIS can be missed. When a later finding reveals a dimension the enumeration didn't have,
+  RE-RUN it on the expanded space rather than patching the single new cell.
+
+Pairs with the **Codex fallback** subagents, and — when the user authorizes the spend for a large PR
+— a **parallel adversarial reviewer** running the same enumeration independently for breadth while
+codex runs the gate; reviewer diversity catches different cells.
+
 ### 2b. CI (event-driven)
 
 Each PR has a background task that waits on `gh pr checks --watch`, then **re-polls** `gh pr checks
