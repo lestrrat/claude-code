@@ -29,6 +29,21 @@ brand-new run even when a prior run's state is still around — see "Loop contro
 when it applies and how a finished prior run is handled. The arg, if any, is still the scope:
 `/review-gauntlet --new auth` is a fresh whole-area run on `auth`.
 
+## Base branch
+
+The run targets a **base branch** — the branch every PR merges into and every fix diff is measured
+against. It is **not assumed to be `main`**: it defaults to the branch checked out at invocation
+(`git rev-parse --abbrev-ref HEAD`; fall back to the repo's default branch if HEAD is detached), which
+may be a release or integration branch. Resolve it **once** at the start of a run and record it in the
+ledger header as `base_branch`; re-read it from the ledger every wake, never from memory (a run is
+long and the checked-out branch can drift).
+
+Throughout this doc, `<base>` means that branch and `origin/<base>` its remote-tracking branch.
+Concretely: fix worktrees branch off `<base>`, PRs open with `--base <base>`, every review diffs
+`<base>...HEAD`, carryover entries are re-judged against current `<base>`, and after each merge local
+`<base>` is fast-forwarded to `origin/<base>`. Where examples below show `main`, read it as `<base>` —
+`main` is only the common default.
+
 ## Authorization note
 
 Invoking this skill is the user's explicit, per-invocation authorization for the git operations it
@@ -101,6 +116,7 @@ The file opens with a one-line run config (re-read every wake — see Constraint
 finding:
 
 ```
+base_branch: main       # the branch PRs target & diffs measure against (set once; see "Base branch")
 api_changes: ask        # ask | allowed (run-wide; set once from the invocation)
 
 id | slug | branch | worktree | pr | head_sha | reviews_ok | ci | attempts | started | status
@@ -132,9 +148,10 @@ completion is its own wake.
 
    - **Live work exists → resume.** **Reconcile against ground truth** (do NOT redo Stage 0/1): for
      each branch/PR read the live SHA, CI status, and verdict files, and refresh the ledger. Also
-     re-read the `api_changes` flag from the ledger header — it governs API-change handling and must
-     be consulted fresh each wake, never from memory (Constraints). This is also the path every
-     `ScheduleWakeup` / background-completion wake takes.
+     re-read the `base_branch` and `api_changes` flags from the ledger header — they govern the
+     merge/diff target and API-change handling, and must be consulted fresh each wake, never from
+     memory (Constraints, Base branch). This is also the path every `ScheduleWakeup` /
+     background-completion wake takes.
    - **No state at all (no `state.md`, no `fix-*` branch/PR) → first run.** Do Stage 0 then Stage 1.
    - **`state.md` exists but is fully terminal — every row `merged`/`aborted`, no open `fix-*` PR →
      the previous run is finished.** Do **not** silently exit "all fixed" (the old bug) and do **not**
@@ -230,7 +247,7 @@ any**" — when there's no history file, a fresh run is just a normal first run.
 The ledger grows append-only during runs, so **prune it regularly** — at the start of every fresh
 run (right before feeding carryover into Stage 0), and any time the user asks. The goal is to drop
 entries that **no longer apply to the current code**, so stale context can't mislead the new sweep.
-Check each entry against current `main`:
+Check each entry against current `<base>`:
 
 - **refuted / aborted / uncertain** whose cited `file:line` no longer exists, or whose code has
   materially changed since — the finding as recorded can't still hold. A changed refuted/aborted site
@@ -266,7 +283,7 @@ A run is distilled into the ledger **exactly once**, at whichever of these happe
    `fix-*` PRs and their worktrees intact** — a fresh run does not close or merge them; it just stops
    driving them. (If the user wants those abandoned, that's a separate explicit ask.)
 2. **Read the full carryover ledger, then prune it** (drop entries no longer applicable to current
-   `main`; confirm any uncertain deletions with the user — see "Pruning the ledger"). Feed the pruned
+   `<base>`; confirm any uncertain deletions with the user — see "Pruning the ledger"). Feed the pruned
    ledger into Stage 0 (below).
 3. Proceed through Stage 0 → Stage 1 → the loop as normal, on a clean `.tmp/review-gauntlet/`.
 
@@ -304,7 +321,7 @@ report that the pass ran on the Claude-subagent fallback.
   `adversarial-review` skill over the same scope (tier/shard it for a large surface, as Stage 0
   already describes), writing findings to `findings-raw.md` in the same shape codex would have. The
   neutral verification pass (Stage 0 step 2) is unchanged.
-- **Stage 2a (per-PR review)** → spawn a **fresh** subagent to review the whole `main...HEAD` diff
+- **Stage 2a (per-PR review)** → spawn a **fresh** subagent to review the whole `<base>...HEAD` diff
   with an equally adversarial pass, ending in exactly one `VERDICT: SATISFIED` / `VERDICT: NOT
   SATISFIED` line. Each fallback pass is still an independent re-roll in its own subagent/context, so
   the two-independent-SATISFIED gate holds exactly as it does with codex.
@@ -354,9 +371,9 @@ This is a fallback for *system* failure, not a preference — use codex whenever
    re-verification — the shards already judged each finding. (Single-verifier mode already had the
    whole-set view, so skip this there.)
 
-4. Seed `state.md`: write the run-config header (`api_changes: allowed` only if the user explicitly
-   OK'd API breakage at invocation, else `ask`), then one row per surviving work item, status
-   `pending`.
+4. Seed `state.md`: write the run-config header — `base_branch` resolved per "Base branch", and
+   `api_changes: allowed` only if the user explicitly OK'd API breakage at invocation, else `ask` —
+   then one row per surviving work item, status `pending`.
 
 If zero findings survive, report that and stop (no loop).
 
@@ -380,12 +397,13 @@ backlog. From the first wake onward this refilling is owned by Loop-control step
 that launches reviews/CI fixes/merges), so initial fan-out and resume use one identical slot-driven
 path; this Stage 1 description is just what each fix subagent does. Each subagent:
 
-1. `git worktree add $PROJECT/.worktrees/<branch> -b <branch>`, `<branch>` = `fix-<short-slug>`.
+1. `git worktree add $PROJECT/.worktrees/<branch> -b <branch> <base>`, `<branch>` = `fix-<short-slug>`
+   (branch off `<base>`, not whatever HEAD happens to be).
 2. Implement the fix for **that finding only**, diff tight and scoped. If it would modify the public
    API surface or behavior, follow **Constraints**: under `ask`, park the finding (`awaiting-api`)
    and confirm with the user before changing anything; under `allowed`, proceed.
-3. Commit, push, open the PR off `main`, tagged `gauntlet-reviewing`:
-   `gh pr create --base main --label gauntlet-reviewing --title ... --body ...` (no "Test plan"
+3. Commit, push, open the PR off `<base>`, tagged `gauntlet-reviewing`:
+   `gh pr create --base <base> --label gauntlet-reviewing --title ... --body ...` (no "Test plan"
    section).
 4. Return: finding id, branch, worktree path, PR number, one-line fix summary.
 
@@ -409,7 +427,7 @@ are yours.
 
 Run reviews **one at a time per PR** — never two at once for the same SHA. When a PR's tip
 (`head_sha`) has fewer than two SATISFIED verdicts and no review already running for it, the wake's
-dispatch step launches **one** review pass: a **fresh** `codex exec` over the whole `main...HEAD`
+dispatch step launches **one** review pass: a **fresh** `codex exec` over the whole `<base>...HEAD`
 diff, no shared context, run as a **background** task (its completion is a wake; the loop folds the
 verdict in at step 2). The second, corroborating review is launched only **after** the first comes
 back SATISFIED — so a still-broken commit never burns the second review before the first has said
@@ -419,14 +437,14 @@ independent regardless.
 
 If a pass's `codex exec` can't return a verdict (quota/rate-limit, auth, timeout, or other system
 error — see "Codex fallback"), retry it once, then run that pass as a **fresh subagent** reviewing the
-whole `main...HEAD` diff and ending in the same `VERDICT:` line. A subagent fallback pass counts
+whole `<base>...HEAD` diff and ending in the same `VERDICT:` line. A subagent fallback pass counts
 toward the two-independent-SATISFIED gate exactly like a codex pass — it's an independent re-roll in
 its own context.
 
 ```
 codex exec --full-auto -C $PROJECT/.worktrees/<branch> \
   -o .tmp/review-gauntlet/review-<pr>-<n>.txt \
-  "Review the changes on this branch vs main (the whole git diff main...HEAD). List any issues with \
+  "Review the changes on this branch vs <base> (the whole git diff <base>...HEAD). List any issues with \
    file:line and a concrete fix. End with exactly one line: 'VERDICT: SATISFIED' or \
    'VERDICT: NOT SATISFIED'."   # run in background
 ```
@@ -441,7 +459,7 @@ As each verdict lands, tally it for the SHA it ran on:
   review gate is met for this HEAD — swap the PR's label:
   `gh pr edit <pr> --remove-label gauntlet-reviewing --add-label gauntlet-accepted`.
 
-Every pass reviews the whole `main...HEAD` diff (not just the last fix-delta), so accumulated fixes
+Every pass reviews the whole `<base>...HEAD` diff (not just the last fix-delta), so accumulated fixes
 are always judged as one piece.
 
 **Gate is two independent SATISFIED verdicts on the same HEAD SHA.** Record the reviewed SHA
@@ -528,13 +546,36 @@ AND `ci == green` — i.e. two SATISFIED verdicts and green CI all recorded agai
 2. Push guard: `gh pr view <branch> --json state --jq .state` must be `OPEN`.
 3. Merge: `gh pr merge <pr> --squash --delete-branch` (use the repo's prevailing merge method if not
    squash).
-4. After the merge, other open PRs may be stale. **Rebase only if** GitHub flags the PR
+4. **Sync the local base branch with the remote.** The merge landed on `origin/<base>`, but local
+   `<base>` is now behind — and Stage 1 worktrees branch off it (`git worktree add … -b <branch>
+   <base>`). Fast-forward it so every subsequent fan-out, rebase, and `<base>...HEAD` diff is measured
+   against the just-merged tip, not a stale one (`<base>` = the run's base branch, not assumed `main`).
+
+   **Run the fast-forward from wherever `<base>` is actually checked out** — don't assume it's the
+   root checkout. A branch can be checked out in at most one working tree, so first locate that tree
+   (`git worktree list` shows the branch per path; the root package counts as one), then fast-forward
+   there. If `<base>` is checked out **nowhere**, update the ref directly instead — a plain `fetch`
+   into the local branch (this form is refused while the branch is checked out, which is why it's the
+   no-working-tree case):
+
+   ```
+   git -C $PROJECT fetch origin <base>
+   # case A — <base> is checked out in some working tree <dir> (root or a worktree):
+   git -C <dir> merge --ff-only origin/<base>
+   # case B — <base> is checked out in no working tree:
+   git -C $PROJECT fetch origin <base>:<base>
+   ```
+
+   Fast-forward only — never a merge commit or reset. If the fast-forward fails (local `<base>` somehow
+   diverged), do NOT force it: that's a bailout condition (stop and surface it), since branching new
+   fixes off a wrong base would corrupt every downstream diff.
+5. After the merge, other open PRs may be stale. **Rebase only if** GitHub flags the PR
    behind/conflicting:
    - Clean rebase (no conflicts) → the PR's own diff is unchanged → keep `reviews_ok`, but `ci` goes
      `pending` and must return green before merging.
    - Rebase requiring conflict resolution → code changed → **reset `reviews_ok` to 0**, re-enter
      Stage 2.
-5. **Clean up on successful merge.** Once the merge is confirmed (`gh pr view <branch> --json state
+6. **Clean up on successful merge.** Once the merge is confirmed (`gh pr view <branch> --json state
    --jq .state` → `MERGED`), tear down that PR's local footprint:
    - `--delete-branch` above already removed the **remote** branch.
    - Verify the merge with the `git-detect-merged` skill, then use `git-cleanup-merged` to remove the
@@ -586,6 +627,11 @@ exit (Loop control step 5), so the next fresh run inherits them.
   `api_changes` flag lives in the ledger header and is re-read every wake — never trust memory, never
   auto-merge an unapproved API break.
 - Reviews are independent re-rolls: separate `codex exec` each pass, no shared context.
+- The two reviews on a PR run **sequentially, never queued together**: launch the first, wait for its
+  verdict, and launch the second **only if the first came back SATISFIED**. A NOT-SATISFIED first
+  review means a fix lands and the SHA changes, so a concurrently-queued second review would be burned
+  on a commit that's about to be replaced — wasted tokens. (Reviews for *different* PRs still run
+  concurrently; only the two for the same PR serialize. See Stage 2a.)
 - Verdicts are pinned to the reviewed HEAD SHA: any new commit (incl. rebase / base-merge / bot
   commit) makes prior verdicts stale. Re-derive from `git rev-parse HEAD`, don't trust memory.
 - Resume vs. fresh run is decided by **liveness**, not by `state.md` existing: live work → resume
@@ -596,7 +642,7 @@ exit (Loop control step 5), so the next fresh run inherits them.
   unresolved to re-surface, merged to dedup) but still judges every finding fresh — carryover is
   advisory, never auto-accept/reject.
 - Prune `.review-gauntlet/history.md` at every fresh run: drop only entries unambiguously moot against
-  current `main`; for anything uncertain, list it and ask the user before deleting. Never silently
+  current `<base>`; for anything uncertain, list it and ask the user before deleting. Never silently
   prune an entry you're unsure about.
 - If `codex exec` can't deliver a verdict (quota/rate-limit, auth, timeout, or other system error —
   *not* a real finding list / `VERDICT:` line), retry once, then do the equivalent work with your own
@@ -604,4 +650,11 @@ exit (Loop control step 5), so the next fresh run inherits them.
   gate is unchanged — note any fallback pass in the report. See "Codex fallback".
 - CI status comes from a re-polled `gh pr checks` snapshot with **zero fail AND zero pending lines** —
   never from the `--watch` exit code (it can exit 0 on pending/unregistered checks). No green, no merge.
+- The run targets a **base branch** (`base_branch` in the ledger header), which is **not assumed to
+  be `main`** — it defaults to the branch checked out at invocation. PRs open with `--base <base>`,
+  worktrees branch off `<base>`, and reviews diff `<base>...HEAD`. Re-read it each wake (see "Base
+  branch").
+- After every merge, fast-forward local `<base>` to `origin/<base>` (Stage 3 step 4) so subsequent
+  fan-out worktrees and `<base>...HEAD` diffs branch off the just-merged tip, not a stale base. If the
+  fast-forward fails, bail out — never force it.
 - No "Test plan" section in PR bodies.

@@ -73,7 +73,7 @@ flowchart TD
     H --> J
     I --> J[survivors = CONFIRMED or ADJUSTED]
     J --> K[Stage 1: fan out - one PR per finding]
-    K --> L0[per finding: worktree off main, implement the fix]
+    K --> L0[per finding: worktree off base branch, implement the fix]
     L0 --> AB{changes public API surface or behavior?}
     AB -- no --> L[commit, push, open PR, launch CI watch]
     AB -- yes --> AC{api_changes flag?}
@@ -96,7 +96,8 @@ flowchart TD
     S --> T
     T --> M
     R -- green --> U[merge: serialized, auto, squash, delete-branch]
-    U --> V[cleanup worktree + local branch, mark merged]
+    U --> U2[sync local base branch to remote ff-only]
+    U2 --> V[cleanup worktree + local branch, mark merged]
     V --> W{all PRs merged or aborted?}
     W -- no --> M
     W -- yes --> X[write carryover ledger + final report] --> X2([done])
