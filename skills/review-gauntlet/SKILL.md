@@ -180,9 +180,11 @@ completion is its own wake.
      its fix subagent (Stage 1). This **backfills continuously**: as each fix subagent finishes and a
      slot frees, pull the next `pending` finding in — never wait for a whole group to drain before
      starting more.
-   - current tip has < 2 SATISFIED verdicts and no review running for that SHA → launch **one**
-     review pass as a **background** task (one at a time per PR — the second only after the first is
-     SATISFIED; Stage 2a);
+   - current tip has < 2 SATISFIED verdicts, its **review preconditions are clear** (no unaddressed
+     Copilot review items, CI not red, no merge conflict with `<base>` — see Stage 2a preconditions),
+     and no review running for that SHA → launch **one** review pass as a **background** task (one at
+     a time per PR — the second only after the first is SATISFIED; Stage 2a). If a precondition is
+     dirty, clear it first (address Copilot items / fix CI / rebase) instead of spending a review;
    - CI red and no fix in flight → dispatch a scoped fix subagent (Stage 2b);
    - mergeable → queue for merge.
    Treat ~8 as a **rolling concurrency cap**, not a wave size: keep up to ~8 fix subagents and ~8
@@ -425,6 +427,27 @@ are yours.
 
 ### 2a. The review gauntlet
 
+**Preconditions — clear Copilot items, CI, and conflicts before reviewing.** A codex review pass is
+expensive and is invalidated by any new commit, so never spend one on a PR whose current tip still
+has review-blocking issues. Before launching a pass, check three things and clear any that are dirty.
+Each fix moves HEAD, so `reviews_ok` resets to 0 (SHA-pinning) and the review re-starts on the clean
+tip:
+
+- **GitHub Copilot review items.** If the PR has any unresolved Copilot review comments, address them
+  with `/copilot-address-reviews <pr>` before reviewing (that skill verifies each item against source
+  before changing code, works them one at a time, and resolves the threads). Detect them from a
+  stored `gh` snapshot — the copilot skill's `fetch-review-items.sh` normalizes unresolved
+  Copilot-authored comments into `.tmp/copilot-review-items.json` — never scrape HTML. No items → no-op.
+- **CI failures.** If `ci` is red for the current tip, do NOT review — fix CI first (Stage 2b).
+  Handle failures **one at a time**, and **prefer a scoped subagent** per failure; use your own
+  judgement on each fix.
+- **Merge conflicts with `<base>`.** If GitHub flags the PR conflicting/behind
+  (`gh pr view <pr> --json mergeable,mergeStateStatus` → `CONFLICTING` / `DIRTY`), rebase it onto
+  `<base>` and resolve the conflict before reviewing — a conflict-resolving rebase changes code, so
+  it resets the gate (Stage 3 step 5).
+
+Only launch a review pass once all three are clear for the current tip.
+
 Run reviews **one at a time per PR** — never two at once for the same SHA. When a PR's tip
 (`head_sha`) has fewer than two SATISFIED verdicts and no review already running for it, the wake's
 dispatch step launches **one** review pass: a **fresh** `codex exec` over the whole `<base>...HEAD`
@@ -626,6 +649,10 @@ exit (Loop control step 5), so the next fresh run inherits them.
 - Public API surface/behavior changes need user confirmation by default (see Constraints). The
   `api_changes` flag lives in the ledger header and is re-read every wake — never trust memory, never
   auto-merge an unapproved API break.
+- Before queueing a review pass on a PR, clear its preconditions on the current tip: address any
+  GitHub Copilot review items (`/copilot-address-reviews <pr>`), fix any CI failures (one at a time,
+  prefer a scoped subagent), and rebase away any conflict with `<base>`. Each moves HEAD → verdicts
+  reset. Never spend a review over open Copilot items, a red check, or a conflicting PR (Stage 2a).
 - Reviews are independent re-rolls: separate `codex exec` each pass, no shared context.
 - The two reviews on a PR run **sequentially, never queued together**: launch the first, wait for its
   verdict, and launch the second **only if the first came back SATISFIED**. A NOT-SATISFIED first

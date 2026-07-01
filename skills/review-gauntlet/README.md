@@ -116,6 +116,9 @@ flowchart TD
   the equivalent review with its own subagents, so a transient Codex outage slows a run down but
   doesn't stall it.
 - It works through GitHub PRs via the `gh` CLI, so the repo needs a GitHub remote.
+- Before it spends a review on a PR, it first clears anything that would waste one: it addresses any
+  GitHub Copilot review comments, fixes failing CI, and rebases a PR that has fallen into conflict
+  with the base branch — then reviews the clean result.
 - It keeps a small `.review-gauntlet/history.md` at the repo root (git-ignored) to remember what past
   runs learned. That's the memory a fresh run carries over. Each fresh run also tidies that file,
   dropping entries that no longer apply to the current code — and when it isn't sure an entry is
