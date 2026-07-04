@@ -24,10 +24,11 @@ files the fixes, defends them through repeated review rounds, waits for CI, and 
 Run it **once** — that's it. It schedules its own follow-ups and keeps working until everything is
 resolved; you don't need to keep it open or re-run it.
 
-If you do come back and run it again later, it does the sensible thing: if a run is still in
-progress it picks up where it left off, and if the last run already finished it asks whether you
-want to start a fresh one rather than either restarting silently or insisting everything's already
-fixed. A fresh run isn't a blind redo — it remembers what earlier runs learned (which findings it
+If you do come back and run it again later, it does the sensible thing. Run it plain (no area) and it
+resumes a run that's still in progress; if the last run already finished it asks whether to start a
+fresh one rather than restarting silently or insisting everything's already fixed. Give it an area
+(or `--new`) and it starts a new run instead — which is also how you deliberately run two at once over
+different parts of the code. A fresh run isn't a blind redo — it remembers what earlier runs learned (which findings it
 gave up on, which it set aside as your call, and which it judged not worth fixing) so it can pick up
 the unfinished threads and not re-litigate the same non-issues. Add `--new` (or just say "start a
 fresh run") to force a new run immediately without being asked.
@@ -111,6 +112,11 @@ flowchart TD
 
 ## Good to know
 
+- You can run more than one at a time in the same repo — say one over `auth` and another over
+  `storage`. Each is its own isolated run with its own pull requests and bookkeeping, so they never
+  step on each other. And if a run gets interrupted, another agent can pick it up right where it left
+  off: it can tell a run that's still being actively driven from one that's been abandoned, so it only
+  ever resumes an orphaned run and never doubles up on one already in progress.
 - It uses Codex as the reviewer, so Codex CLI should be available. If Codex can't return a verdict
   because of a system problem — quota or rate limits, auth, a timeout — it retries once and then does
   the equivalent review with its own subagents, so a transient Codex outage slows a run down but
@@ -119,7 +125,7 @@ flowchart TD
 - Before it spends a review on a PR, it first clears anything that would waste one: it addresses any
   GitHub Copilot review comments, fixes failing CI, and rebases a PR that has fallen into conflict
   with the base branch — then reviews the clean result.
-- It keeps a small `.review-gauntlet/history.md` at the repo root (git-ignored) to remember what past
+- It keeps a small `.review-gauntlet/history/` at the repo root (git-ignored, one file per run) to remember what past
   runs learned. That's the memory a fresh run carries over. Each fresh run also tidies that file,
   dropping entries that no longer apply to the current code — and when it isn't sure an entry is
   safe to drop, it asks you first rather than guessing.

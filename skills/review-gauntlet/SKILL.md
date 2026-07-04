@@ -1,6 +1,6 @@
 ---
 name: review-gauntlet
-description: Self-looping adversarial-review-to-merge pipeline. Codex runs an adversarial review (a given area/topic, else the whole repo), findings are neutrally verified, each survivor becomes its own PR, and a per-PR review gauntlet (two independent SATISFIED verdicts on the same commit, reviewed one at a time over the whole diff) plus event-driven CI monitoring gate an auto-merge. Drives its own loop via ScheduleWakeup — invoke once, no /loop wrapper. Args: [area or topic]
+description: Self-looping adversarial-review-to-merge pipeline. Codex runs an adversarial review (a given area/topic, else the whole repo), findings are neutrally verified, each survivor becomes its own PR, and a per-PR review gauntlet (two independent SATISFIED verdicts on the same commit, reviewed one at a time over the whole diff) plus event-driven CI monitoring gate an auto-merge. Multiple isolated runs (each keyed by a run-id, with a lease so only one agent drives each) can run concurrently in one repo. Drives its own loop via ScheduleWakeup — invoke once, no /loop wrapper. Args: [--run <id>] [area or topic]
 ---
 
 # Review Gauntlet
@@ -13,16 +13,27 @@ Act on each result the moment it lands. NEVER block on a whole batch.
 
 ## Args
 
-`/review-gauntlet [area or topic]`
+`/review-gauntlet [--run <id>] [--new] [area or topic]`
 
-- With an argument → codex reviews that area/topic.
-- Without one → codex does a **whole-repo** adversarial sweep. This is the intended default.
+- With an argument → codex reviews that area/topic. A scope arg on a **bare** invocation always starts
+  a **new** run (that's how you launch a second concurrent run); it never adopts an existing run.
+- Without one → codex does a **whole-repo** adversarial sweep (the intended default); an **arg-less**
+  bare invocation is also the resume path — it adopts the sole orphaned run, or asks among several.
+- `--run <id>` → bind to a specific existing run (resume it). Threaded automatically through every
+  self-wake (with an internal `--token`, agent-managed — users don't pass it). See "Run identity and
+  concurrency".
 
 **Do NOT ask the user to confirm the scope.** A no-arg invocation means whole-repo on purpose —
 proceed immediately, no "are you sure you want the whole repo?" prompt, no pre-fan-out checkpoint.
 The only thing that narrows scope is an explicit argument.
 
 Invoke it **once**. The skill drives its own loop (see "Loop control") — you do NOT wrap it in `/loop`.
+
+**Multiple runs can share a repo.** Every fresh invocation is its own **isolated run** with a private
+ledger, tmp dir, branches, and PRs — two runs (e.g. `/review-gauntlet auth` and
+`/review-gauntlet storage`) never touch each other's state. `--run <id>` targets a specific existing
+run (used to resume it, and threaded automatically through every self-wake); omit it to resume the
+sole live run, choose among several, or start a new one. See "Run identity and concurrency".
 
 **Fresh-run signal.** An explicit `--new` flag (or a phrase like "fresh run" / "start over") forces a
 brand-new run even when a prior run's state is still around — see "Loop control" step 1 for exactly
@@ -43,6 +54,112 @@ Concretely: fix worktrees branch off `<base>`, PRs open with `--base <base>`, ev
 `<base>...HEAD`, carryover entries are re-judged against current `<base>`, and after each merge local
 `<base>` is fast-forwarded to `origin/<base>`. Where examples below show `main`, read it as `<base>` —
 `main` is only the common default.
+
+## Run identity and concurrency
+
+Multiple review-gauntlet runs can execute concurrently in one repo, and a new agent instance can pick
+up a run a prior instance left mid-flight — but **never two agents driving the same ledger at once**
+(that is the bug this guards against). Two mechanisms: a **run ID** that namespaces everything a run
+owns, and a **run lease** that marks whether an agent is actively driving that run right now.
+
+### Run ID — namespacing
+
+Minted once at the start of a fresh run — compact, filesystem- and label-safe. Create the run dir
+**atomically** (`mkdir` fails if it already exists) so a run-id collision can't silently share a dir;
+retry with a fresh id on the rare clash:
+
+```
+run_id="g$(date +%y%m%d-%H%M)-$(openssl rand -hex 4)"   # e.g. g260704-0915-a3f29c1b (32 bits entropy)
+mkdir "$PROJECT/.tmp/review-gauntlet/$run_id" || run_id=…   # retry on collision
+```
+
+Record it in the ledger header (`run_id:`) and re-read it every wake (like `base_branch`); never trust
+in-context memory for it — a wake may be a fresh agent instance. It flows into:
+
+| Owned by the run | Namespaced form |
+|------------------|-----------------|
+| tmp working dir  | `<rundir>` = `.tmp/review-gauntlet/<run-id>/` (all findings/verdicts/state/review/ci/abort/lease files) |
+| ledger header    | `run_id: <run-id>` |
+| fix branch       | `fix-<run-id>-<finding-id>-<slug>` (finding-id keeps same-slug findings from colliding) |
+| worktree         | `$PROJECT/.worktrees/fix-<run-id>-<finding-id>-<slug>` |
+| PR owner label   | `gauntlet-run-<run-id>` (every PR the run opens carries it; authoritative "mine" marker) |
+| self-wake prompt | `/review-gauntlet --run <run-id> --token <agent-token> <args>` (carries the id **and** the driver token so a summarized wake re-proves ownership without guessing) |
+
+**Isolation invariant — a run touches ONLY its own work.** It reads/writes only its `<rundir>`, only
+its `state.md`, only PRs carrying its `gauntlet-run-<run-id>` label (equivalently on a `fix-<run-id>-`
+branch), and only those worktrees/branches. It MUST NOT reconcile, relabel, review, fix, merge, or
+clean up another run's PRs/branches — **every git/gh scan is filtered to this run's label or branch
+prefix.** The status labels `gauntlet-reviewing` / `gauntlet-accepted` describe gate state and are
+shared across runs; ownership is the per-run label, never a status label.
+
+**Shared across runs:** the carryover ledger tree `.review-gauntlet/history/` (kept race-free by one
+file per run — see "Fresh runs and carryover"), the two status labels, and the Copilot precondition's
+scratch file `.tmp/copilot-review-items.json` (written by `/copilot-address-reviews`) — treat that
+last one as ephemeral to a single fetch→address cycle and re-fetch rather than trusting a stale
+snapshot another run may have overwritten.
+
+### Run lease — one active driver at a time
+
+Namespacing keeps two *runs* apart; the **lease** keeps two *agents* from driving the **same** run.
+Each run has `<rundir>/lease.json`:
+
+```
+{ "agent": "<token>", "updated": <unix-ts> }   # token = the agent holding the run; ts = last heartbeat
+```
+
+- **Mint** an agent token (`openssl rand -hex 4`) when you first take a run — at fresh-run start or on
+  adoption — keep it in context, **and put it in your self-wake prompt** (`--token <tok>`) so a
+  summarized/amnesiac wake recovers it from the prompt instead of guessing. **You own the run iff the
+  token you present (prompt `--token`, else in-context) equals the lease's `agent`.**
+- **Claim atomically.** Taking or adopting a run is a check-and-set that MUST be serialized against
+  other agents: acquire an atomic lock first — `mkdir <rundir>/claim.lock` (fails if held) — then read
+  the lease, decide, write your token + fresh `updated`, and `rmdir` the lock. Two agents racing to
+  adopt can't both win because only one `mkdir` succeeds. (A crashed claim leaves a stale
+  `claim.lock`; treat one whose mtime is older than a few minutes as abandoned and clear it.)
+- **Heartbeat.** Rewrite the lease with `updated = $(date +%s)` every wake once you're the confirmed
+  owner, **and** immediately before and after any long *foreground* step (a Stage 0 sweep, a
+  verification pass) so a busy turn still looks alive. Long *review/CI* work is already backgrounded,
+  so between those the turn is short. A lease is **stale** only once `now - updated` exceeds **~30
+  min** — comfortably longer than any single foreground operation, so liveness flags a *dead* driver,
+  not a busy one.
+- **Never hold the run hostage on a user prompt.** Do NOT block the loop waiting on a user answer —
+  that freezes the heartbeat and could let the run be declared stale mid-drive. Park the finding
+  `awaiting-api`, surface the question, keep driving the other findings, reschedule, and fold the
+  answer in when it lands as its own wake (Constraints).
+- **Adopt only an orphaned run.** Safe to take over only when the lease is **absent or stale** (under
+  the claim lock). After writing your token, re-read: if it isn't yours, you lost the race — stand down.
+- **Stand down if superseded.** On a self-wake, present your `--token`: if the lease is **fresh** and
+  its `agent` is a **different** token, you were superseded (a takeover while you were hung) — do NOT
+  drive; report and stop. Never overwrite a fresh lease you don't own. (Carrying the token in the
+  prompt removes any amnesia ambiguity — a self-wake always knows its own token.)
+- **Release** on normal exit: delete `lease.json` (with the owner label) so the finished run shows no
+  active driver.
+
+### Resolving a wake (Loop control step 1 applies this)
+
+1. **`--run <id>` given** (every self-wake; also a manual targeted resume). Load `<rundir>/state.md`.
+   Under the claim lock, compare the token you present to the lease: **matches** (self-wake with
+   `--token`) → refresh lease, reconcile, continue; **lease absent/stale** → adopt (write token, fresh
+   ts, read-back); **lease fresh but a different token** → for a self-wake, stand down (superseded);
+   for a **manual** `--run` with no matching token, another agent appears active, so **confirm takeover
+   with the user** before adopting.
+2. **Bare invocation** → the arg decides intent:
+   - **A scope arg is given** (`/review-gauntlet <area>`, no `--run`) → **start a NEW run** on that
+     scope. A scope is an explicit "sweep this now", so it never silently adopts an existing run — this
+     is how you launch a second concurrent run (`auth` alongside `storage`). To resume a specific run
+     instead, pass `--run <id>`.
+   - **No arg at all** (`/review-gauntlet`) → resume-oriented: **discover runs** and bucket by lease —
+     distinct `gauntlet-run-*` labels on open `fix-*` PRs ∪ run-ids with a `<rundir>/` (its `state.md`
+     or `lease.json`; a run mid-Stage-0 has a dir before any PR), each **actively-driven** (fresh
+     lease), **orphaned** (non-terminal, lease absent/stale), or **finished** (terminal, no open PR):
+     - exactly one **orphaned** → adopt and resume it ("pick up where the previous instance left off");
+     - several orphaned → list them (id, scope, #open PRs) and **ask which to resume, or start new**;
+     - only **actively-driven** → each has a live driver; do NOT hijack — offer to start a **new** run;
+     - only **finished** → the finished-run prompt (Loop control step 1), per run;
+     - none at all → first run: mint a run-id, Stage 0 → Stage 1.
+3. **`--new`** (or "fresh run" / "start over") → always mint a NEW run-id + token and start fresh with
+   carryover; it creates an independent run and does **not** pre-empt other runs (they keep their own
+   drivers). Scope is the arg, if any.
 
 ## Authorization note
 
@@ -84,13 +201,16 @@ unapproved API change must not merge — revert it or get approval first (ground
 
 ## File locations
 
-Everything under `.tmp/review-gauntlet/` (create at start of a fresh run; on resume, reuse it):
+Everything under the run's own dir `<rundir>` = `.tmp/review-gauntlet/<run-id>/` (create at the start
+of a fresh run; on resume, reuse the run's existing dir). Per-run dirs are what keep concurrent runs'
+files from colliding — see "Run identity and concurrency".
 
-| File | Contents |
+| File (under `<rundir>`) | Contents |
 |------|----------|
 | `findings-raw.md` | Codex's raw adversarial findings |
 | `verdicts.md` | Neutral verification verdicts (which findings survive) |
 | `state.md` | Live per-finding ledger — a **cache/hint**, not the source of truth (see below) |
+| `lease.json` | This run's active-driver lease (`{agent, updated}`; see "Run lease") |
 | `review-<pr>-<n>.txt` | Codex's PR review output, round `n` |
 | `ci-<pr>.txt` | Latest `gh pr checks` snapshot for a PR (re-polled after the watch, not the watch stream) |
 | `abort-<id>.md` | Detailed log for an aborted finding-task |
@@ -99,8 +219,9 @@ Store ALL codex and `gh` output to `.tmp/` first, then Read/Grep it. NEVER `/tmp
 
 **Durable cross-run knowledge lives outside `.tmp/`.** `.tmp/` may be wiped between runs, so the
 one thing a *new* run needs to remember from old ones — the carryover ledger — is kept at the repo
-root in `.review-gauntlet/history.md` (git-ignored; add the entry to `.gitignore` if missing). It
-survives `.tmp` cleanup. Everything else stays ephemeral under `.tmp/review-gauntlet/`. See
+root under `.review-gauntlet/history/` (git-ignored; add `.review-gauntlet/` to `.gitignore` if
+missing), **one file per run** (`<run-id>.md`) so concurrent runs never clobber a shared file. It
+survives `.tmp` cleanup. Everything else stays ephemeral under the per-run `<rundir>`. See
 "Fresh runs and carryover".
 
 ### The ledger — `state.md`
@@ -112,12 +233,14 @@ exist on which SHA). Every wake re-derives what's due from those, then refreshes
 stale or half-written ledger is self-healing — never act on it without reconciling against git/gh
 first.
 
-The file opens with a one-line run config (re-read every wake — see Constraints), then one row per
-finding:
+The file opens with a short run-config header (`run_id`, `base_branch`, `api_changes`, `phase` —
+re-read every wake, see Constraints and "Run identity and concurrency"), then one row per finding:
 
 ```
+run_id: g260704-0915-a3f29c1b  # this run's identity — namespaces its dir/branches/label/wakes (set once)
 base_branch: main       # the branch PRs target & diffs measure against (set once; see "Base branch")
 api_changes: ask        # ask | allowed (run-wide; set once from the invocation)
+phase: fanout           # reviewing (Stage 0) → fanout (Stage 1+); written at run start before Stage 0
 
 id | slug | branch | worktree | pr | head_sha | reviews_ok | ci | attempts | started | status
 ```
@@ -142,35 +265,49 @@ completion is its own wake.
 
 **Every wake — reconcile, dispatch, reschedule:**
 
-1. **Init, resume, or start fresh.** Decide on **liveness**, not on whether `state.md` exists. Live
-   work = any open skill-created `fix-*` PR/branch **OR** any non-terminal ledger row (`pending` /
-   `in_review` / `mergeable` / `awaiting-api`). Three cases:
+1. **Resolve the run + lease, then init / resume / start fresh.** First bind **which run this wake is
+   for** and confirm you may drive it, per "Run identity and concurrency": a `--run <id>` self-wake
+   presents its `--token` and, under the run's claim lock, continues if the token matches the lease,
+   adopts if the lease is absent/stale, or **stands down** if a fresh lease bears a different token; a
+   **scoped** bare invocation starts a NEW run, while an **arg-less** bare invocation discovers runs
+   and adopts the sole **orphaned** one (asks among several, refuses to hijack an actively-driven one).
+   This claim-locked lease check is what guarantees **no two agents drive one ledger**.
 
-   - **Live work exists → resume.** **Reconcile against ground truth** (do NOT redo Stage 0/1): for
-     each branch/PR read the live SHA, CI status, and verdict files, and refresh the ledger. Also
-     re-read the `base_branch` and `api_changes` flags from the ledger header — they govern the
-     merge/diff target and API-change handling, and must be consulted fresh each wake, never from
-     memory (Constraints, Base branch). This is also the path every `ScheduleWakeup` /
-     background-completion wake takes.
-   - **No state at all (no `state.md`, no `fix-*` branch/PR) → first run.** Do Stage 0 then Stage 1.
-   - **`state.md` exists but is fully terminal — every row `merged`/`aborted`, no open `fix-*` PR →
-     the previous run is finished.** Do **not** silently exit "all fixed" (the old bug) and do **not**
-     silently restart. **Ask the user** whether to start a new run — e.g. "The previous
-     review-gauntlet run finished (N merged, M aborted). Start a new run?" On yes, start a fresh run
-     **with carryover** (see "Fresh runs and carryover"). On no, emit the prior run's final report and
-     stop. This prompt is the *only* wake that asks the user about scope.
+   Once bound and confirmed owner, decide on **liveness of THIS run**, not on whether some `state.md`
+   exists — and scope **every** git/gh scan to this run's `gauntlet-run-<run-id>` label / `fix-<run-id>-`
+   branch prefix so another run's PRs are never mistaken for your own. Live work (this run) = any open
+   PR carrying this run's label / on a `fix-<run-id>-` branch **OR** any non-terminal row in this run's
+   `state.md` (`pending` / `in_review` / `mergeable` / `awaiting-api`). Three cases:
 
-   **The `--new` fresh-run signal short-circuits the above:** if the user invoked with `--new` (or
-   "fresh run" / "start over"), start a fresh run with carryover immediately, regardless of liveness —
-   no prompt. Live work, if any, is handled per "Fresh runs and carryover" (open PRs are left intact;
-   the new run is a new sweep, and live state is archived into the carryover ledger first).
+   - **This run has live work → resume.** **Reconcile against ground truth** (do NOT redo Stage 0/1):
+     for each of this run's branches/PRs read the live SHA, CI status, and verdict files, and refresh
+     the ledger. Re-read `run_id`, `base_branch`, and `api_changes` from the ledger header — they
+     govern namespacing, the merge/diff target, and API-change handling, and must be consulted fresh
+     each wake, never from memory (a wake may be a fresh agent instance that just adopted the run;
+     Constraints, Base branch). Refresh the lease. This is the path every `--run` self-wake takes.
+   - **No run bound and none live (no `gauntlet-run-*` PR, no non-terminal `<rundir>`) → first run.**
+     Mint a run-id + agent token, atomically create `<rundir>`, write the lease **and a minimal
+     `state.md` header** (`run_id`/`base_branch`/`api_changes`, `phase: reviewing`) *before* Stage 0 —
+     so a death mid-sweep leaves a discoverable, adoptable run rather than an invisible one — then do
+     Stage 0 then Stage 1.
+   - **This run's `state.md` is fully terminal — every row `merged`/`aborted`, no open `fix-<run-id>-*`
+     PR → the run is finished.** Do **not** silently exit "all fixed" (the old bug) and do **not**
+     silently restart. **Ask the user** whether to start a new run — e.g. "review-gauntlet run
+     <run-id> finished (N merged, M aborted). Start a new run?" On yes, start a fresh run **with
+     carryover** (see "Fresh runs and carryover"). On no, emit that run's final report and stop. This
+     prompt is the *only* wake that asks the user about scope.
 
-   **Reconcile labels too** (idempotent, and retroactive). Ensure the labels exist
-   (`gh label create … --force`, as in Stage 1), then for every gauntlet PR — those in the ledger or
-   on a `fix-*` branch — set its label to match its **live** gate state: `gauntlet-accepted` if its
-   current HEAD holds two SATISFIED verdicts, else `gauntlet-reviewing`; add the label if it has
-   none. This is what labels PRs that a review-gauntlet run opened **before** labeling existed —
-   they simply get the right label on the next wake.
+   **The `--new` fresh-run signal short-circuits the above:** `--new` (or "fresh run" / "start over")
+   mints a NEW run-id + token and starts a fresh run with carryover immediately, regardless of any
+   run's liveness — no prompt, and **other live runs are left untouched** (they keep running under
+   their own drivers). Its scope is the arg, if any.
+
+   **Reconcile labels too** (idempotent, retroactive, **scoped to this run**). Ensure the labels exist
+   (`gh label create … --force`, as in Stage 1 — including this run's `gauntlet-run-<run-id>`), then
+   for every PR **of this run** (its label, or on a `fix-<run-id>-` branch): ensure it carries
+   `gauntlet-run-<run-id>`, and set its status label to match its **live** gate state —
+   `gauntlet-accepted` if its current HEAD holds two SATISFIED verdicts, else `gauntlet-reviewing`;
+   add the status label if it has none. **Never touch another run's PRs.**
 2. **Fold in completions.** For any background task that finished (CI watch → `ci-<pr>.txt`; review →
    `review-<pr>-<n>.txt`), record the result against the SHA it ran on and act per Stage 2.
 3. **Dispatch due work — non-blocking, idempotent, bounded.** Launch only what is actually due *and
@@ -193,17 +330,21 @@ completion is its own wake.
 4. **Merge** at most one queued PR this wake, serialized, after re-confirming its gate against the
    live SHA (Stage 3).
 5. **Reschedule or exit.**
-   - Any non-terminal PR remains → set a `ScheduleWakeup` heartbeat (`prompt: "/review-gauntlet
-     <args>"`, delay ~3–4 min, cache-warm) as a fallback; background completions will usually wake
-     you sooner. Return.
-   - All PRs `merged` or `aborted` → **distill the run into the carryover ledger** (append a run
-     block to `.review-gauntlet/history.md` — merged fixes, aborted findings + why, declined-API
-     findings, and the REFUTED/UNCERTAIN sets; see "Fresh runs and carryover"), emit the final report,
-     and **do not reschedule**. The loop ends. **Leave `.tmp/review-gauntlet/` in place** (do NOT
-     archive it here) — the terminal `state.md` is what lets the next manual invocation detect a
-     *finished* run and take the "ask the user" branch in step 1 instead of the old silent exit. (If a
-     stale heartbeat fires after exit, it harmlessly re-hits the finished-run branch rather than a
-     blank "first run".) Archiving of the old `.tmp` happens only when a fresh run actually starts.
+   - Any non-terminal PR remains → refresh this run's lease, then set a `ScheduleWakeup` heartbeat
+     (`prompt: "/review-gauntlet --run <run-id> --token <agent-token> <args>"` — `--run` rebinds the
+     wake to this run and `--token` re-proves ownership of its lease; delay ~3–4 min, cache-warm) as a
+     fallback; background completions will usually wake you sooner. Return.
+   - All this run's PRs `merged` or `aborted` → **distill the run into the carryover ledger** (write
+     this run's block to its own file `.review-gauntlet/history/<run-id>.md` — merged fixes, aborted
+     findings + why, declined-API findings, and the REFUTED/UNCERTAIN sets; per-run files never
+     contend, see "Fresh runs and carryover"), **release the run** (delete this run's
+     `gauntlet-run-<run-id>` owner label via `gh label delete gauntlet-run-<run-id> --yes`, and delete
+     `<rundir>/lease.json`; the shared status labels stay), emit the final report, and **do not
+     reschedule**. This run's loop ends. **Leave
+     `<rundir>` in place** (do NOT delete it here) — its terminal `state.md` is what lets a later bare
+     invocation detect *this* *finished* run and take the "ask the user" branch in step 1 instead of a
+     silent exit. (A stale heartbeat firing after exit harmlessly re-hits the finished-run branch via
+     its `--run <run-id>`; with the lease released it reads as an un-driven finished run.)
 
 **Idempotency is the load-bearing property.** Because every wake re-derives from git/gh and launches
 only work not already in flight, a relaunch after a killed session — or two completions landing close
@@ -212,10 +353,15 @@ gate). The worst case is a wasted duplicate review, which is harmless: it's an i
 anyway. The agent is also single-threaded per turn, so wake *decisions* never truly race — only
 in-flight tasks do.
 
-**Resume after a killed session:** in-flight background tasks die with the session, but nothing
-authoritative is lost. A new `/review-gauntlet <args>` invocation (without `--new`) sees the live
-work, reconciles against git/gh, relaunches whatever is due, and continues — no Stage 0/1 once
-PRs/branches already exist. (Resume vs. fresh run is decided in Loop control step 1.)
+**Resume after a killed session — including by a different agent instance:** in-flight background
+tasks die with the session, but nothing authoritative is lost. A new invocation reconciles against
+git/gh and continues — no Stage 0/1 once PRs/branches already exist. It binds to the run via
+`--run <id>` (what every self-wake carries, so a fresh instance adopting an orphaned run's heartbeat
+just works) or, for a bare re-invocation, by discovering live runs and adopting the sole **orphaned**
+one (asking among several). Adoption is gated on the **run lease**: an agent takes over only a run
+whose lease is absent or stale, so it can always tell whether another agent is still driving that
+ledger and never double-drives an actively-held run (see "Run identity and concurrency" and Loop
+control step 1). This is how a later agent picks up exactly where a previous instance left off.
 
 ---
 
@@ -226,11 +372,13 @@ by the user answering "yes" to the finished-run prompt (Loop control step 1) or 
 `--new`. It is *not* a resume: it does a brand-new codex sweep. What makes it more than a blind
 re-run is **carryover** — it inherits what earlier runs already learned.
 
-### The carryover ledger — `.review-gauntlet/history.md`
+### The carryover ledger — `.review-gauntlet/history/`
 
-A durable, git-ignored, append-only log at the repo root (NOT under `.tmp/`, which can be wiped).
-Each finished run appends one block; a fresh run reads the **whole file** so knowledge compounds
-across many runs. A block records:
+A durable, git-ignored store at the repo root (NOT under `.tmp/`, which can be wiped). To stay
+concurrency-safe it is **one file per run**, `.review-gauntlet/history/<run-id>.md` — never a single
+shared file two runs could clobber. Each finished run writes **its own** file exactly once; a fresh
+run reads **every file in the directory** (concatenated) so knowledge compounds across runs. A per-run
+file records:
 
 - **merged** — finding slug + one-line fix, per PR that shipped.
 - **aborted** — finding slug + why it couldn't clear the bar (pointer to its `abort-<id>.md` if still
@@ -240,9 +388,14 @@ across many runs. A block records:
 - **refuted** — findings the verification pass rejected as non-issues, with a one-line reason.
 - **uncertain** — findings left for the user to triage.
 
-If the file or `.review-gauntlet/` dir doesn't exist, create it (and add `.review-gauntlet/` to the
-repo's `.gitignore` if it's not already ignored). "carry over knowledge from previous runs, **if
-any**" — when there's no history file, a fresh run is just a normal first run.
+If `.review-gauntlet/history/` doesn't exist, create it (and add `.review-gauntlet/` to the repo's
+`.gitignore` if it's not already ignored). When the directory is empty, a fresh run is just a normal
+first run.
+
+**Why per-run files.** Because each run only ever writes and prunes its **own** file, appends never
+contend and there is no shared-file rewrite to race — the append/prune hazard of a single `history.md`
+is gone. (A legacy single `history.md`, if present from before this split, is still read for carryover;
+leave it in place as read-only history.)
 
 ### Pruning the ledger
 
@@ -268,26 +421,25 @@ wrongly-pruned `aborted` loses a real unfinished thread.
 
 Note what was pruned (and what the user kept) so the decision is auditable on the next run.
 
-A run is distilled into the ledger **exactly once**, at whichever of these happens to it:
-
-- **Normal exit** (all PRs terminal) — Loop control step 5 appends the finished run's block. The
-  finished-run "ask the user → yes" path reuses *that* block; it does not re-distill.
-- **Pre-empted by `--new` while still live** — the fresh-run start (step 1 below) snapshots the
-  not-yet-finished run before abandoning it.
+A run is distilled into the ledger **exactly once**, on its **normal exit** (all its PRs terminal) —
+Loop control step 5 writes that run's own `.review-gauntlet/history/<run-id>.md`. The finished-run
+"ask the user → yes" path reuses *that* file; it does not re-distill. (`--new` no longer pre-empts
+other runs — each run is isolated and always distills itself on its own exit — so there is no
+mid-flight snapshot path.)
 
 ### Starting a fresh run
 
-1. **Distill/snapshot the prior `.tmp` state, then archive it.** If the prior run exited normally its
-   block is already in the ledger — skip straight to archiving. If you're pre-empting still-live work
-   under `--new`, first append the current `state.md` rows to a history block as-is so nothing is
-   lost. Either way, then archive `.tmp/review-gauntlet/` to a sibling `.tmp/review-gauntlet-<run-id>/`
-   (a timestamp works as `<run-id>`) so the new run gets a clean `.tmp/review-gauntlet/`. **Leave open
-   `fix-*` PRs and their worktrees intact** — a fresh run does not close or merge them; it just stops
-   driving them. (If the user wants those abandoned, that's a separate explicit ask.)
-2. **Read the full carryover ledger, then prune it** (drop entries no longer applicable to current
-   `<base>`; confirm any uncertain deletions with the user — see "Pruning the ledger"). Feed the pruned
-   ledger into Stage 0 (below).
-3. Proceed through Stage 0 → Stage 1 → the loop as normal, on a clean `.tmp/review-gauntlet/`.
+1. **Mint the new run-id + agent token; atomically create its clean `<rundir>`.** Per-run dirs make a
+   fresh run isolated by construction — `mkdir` of `.tmp/review-gauntlet/<new-run-id>/` starts empty
+   (retry on the rare id clash); there is nothing to archive and no prior `.tmp` to wipe. Write the
+   lease and a minimal `state.md` header immediately (so the run is discoverable before Stage 0
+   finishes). Any already-live run keeps its own dir, lease, and heartbeat; a fresh run never closes,
+   merges, or stops driving another run's PRs (abandoning a specific run is a separate explicit ask).
+2. **Read every file in `.review-gauntlet/history/`, then prune** (drop entries no longer applicable
+   to current `<base>`; confirm any uncertain deletions with the user — see "Pruning the ledger").
+   Pruning only ever edits **finished** runs' own files (no live writer), so there's nothing to race.
+   Feed the pruned carryover into Stage 0 (below).
+3. Proceed through Stage 0 → Stage 1 → the loop as normal, on the clean `<rundir>`.
 
 ### How carryover shapes Stage 0
 
@@ -335,25 +487,28 @@ This is a fallback for *system* failure, not a preference — use codex whenever
 1. Run the codex adversarial review. Scope = the arg if given, else the whole repo.
 
    ```
-   codex exec --sandbox workspace-write -o .tmp/review-gauntlet/findings-raw.md \
+   codex exec --sandbox workspace-write -o <rundir>/findings-raw.md \
      "Perform an adversarial code review of <SCOPE>. For each finding give: a stable ID, \
       severity, file:line, the defect, a concrete reproduction trigger, the impact, and a \
       concrete fix. Be hostile — surface everything that could be wrong. Do not edit code."
    ```
 
    For a whole-repo sweep, mirror the tiering strategy in the `adversarial-review` skill if the
-   surface is large. If codex can't produce findings (quota/rate-limit, auth, timeout, or other
-   system error — see "Codex fallback"), retry once, then run this sweep with your own subagents into
+   surface is large — and shard it rather than running one giant foreground call, so each codex call
+   stays short enough that the driver can heartbeat its lease between shards (a single sweep longer
+   than the ~30-min stale window would otherwise let another agent adopt the run mid-Stage-0; see "Run
+   lease"). If codex can't produce findings (quota/rate-limit, auth, timeout, hang, or other system
+   error — see "Codex fallback"), retry once, then run this sweep with your own subagents into
    `findings-raw.md` and continue with verification as normal.
 
-   **On a fresh run, load carryover first** (`.review-gauntlet/history.md`, pruned of stale entries
-   per "Pruning the ledger") and pass the prior unresolved items (aborted / declined-api / uncertain)
+   **On a fresh run, load carryover first** (all of `.review-gauntlet/history/`, pruned of stale
+   entries per "Pruning the ledger") and pass the prior unresolved items (aborted / declined-api / uncertain)
    to the reviewer as known areas of interest, so a re-find is recognized rather than treated as
    net-new. See "Fresh runs and carryover".
 
 2. **Neutral verification pass.** Audit every finding with the `adversarial-review` Phase 2 scheme —
    `CONFIRMED` / `ADJUSTED` / `REFUTED` / `UNCERTAIN`, biased toward refuting — into
-   `.tmp/review-gauntlet/verdicts.md`. On a fresh run, hand the verifier the carryover sets (refuted
+   `<rundir>/verdicts.md`. On a fresh run, hand the verifier the carryover sets (refuted
    to suppress, merged to dedup, unresolved to prioritize) per "Fresh runs and carryover". Scale by
    finding count:
    - **≤ 10 findings** → one fresh `Explore` subagent audits them all (it sees the whole set, so no
@@ -373,22 +528,27 @@ This is a fallback for *system* failure, not a preference — use codex whenever
    re-verification — the shards already judged each finding. (Single-verifier mode already had the
    whole-set view, so skip this there.)
 
-4. Seed `state.md`: write the run-config header — `base_branch` resolved per "Base branch", and
-   `api_changes: allowed` only if the user explicitly OK'd API breakage at invocation, else `ask` —
-   then one row per surviving work item, status `pending`.
+4. Fill in `<rundir>/state.md`: the run-config header (`run_id`, `base_branch`, `api_changes`) was
+   already written at run start (Loop control step 1 / "Starting a fresh run"); now append one row per
+   surviving work item, status `pending`, and flip `phase` from `reviewing` to `fanout`.
 
-If zero findings survive, report that and stop (no loop).
+If zero findings survive, **release the run before stopping** — write its (empty) carryover file
+`.review-gauntlet/history/<run-id>.md`, delete `<rundir>/lease.json` and the `gauntlet-run-<run-id>`
+label *if it exists* (Stage 1 hasn't run yet on a zero-survivor exit, so the owner label is usually
+not created — skip it then), mark `state.md` terminal — then report and stop (no loop). Do not leave
+the lease dangling.
 
 ---
 
 ## Stage 1 — Fan out (one PR per finding)
 
-**Ensure the status labels exist** first (idempotent — `--force` creates or updates, safe on every
-resume):
+**Ensure the labels exist** first — the two shared status labels plus this run's owner label
+(idempotent — `--force` creates or updates, safe on every resume):
 
 ```
 gh label create gauntlet-reviewing --color FBCA04 --description "review-gauntlet: under review" --force
 gh label create gauntlet-accepted  --color 0E8A16 --description "review-gauntlet: passed two reviews" --force
+gh label create gauntlet-run-<run-id> --color 5319E7 --description "review-gauntlet: run <run-id>" --force
 ```
 
 Spawn one subagent per surviving finding, up to a **rolling cap of ~8 in flight** — NOT in barrier
@@ -399,14 +559,17 @@ backlog. From the first wake onward this refilling is owned by Loop-control step
 that launches reviews/CI fixes/merges), so initial fan-out and resume use one identical slot-driven
 path; this Stage 1 description is just what each fix subagent does. Each subagent:
 
-1. `git worktree add $PROJECT/.worktrees/<branch> -b <branch> <base>`, `<branch>` = `fix-<short-slug>`
-   (branch off `<base>`, not whatever HEAD happens to be).
+1. `git worktree add $PROJECT/.worktrees/<branch> -b <branch> <base>`, `<branch>` =
+   `fix-<run-id>-<finding-id>-<short-slug>` (the `<run-id>` prefix scopes the branch to this run so
+   concurrent runs never collide; the `<finding-id>` keeps two findings with the same slug apart;
+   branch off `<base>`, not whatever HEAD happens to be).
 2. Implement the fix for **that finding only**, diff tight and scoped. If it would modify the public
    API surface or behavior, follow **Constraints**: under `ask`, park the finding (`awaiting-api`)
    and confirm with the user before changing anything; under `allowed`, proceed.
-3. Commit, push, open the PR off `<base>`, tagged `gauntlet-reviewing`:
-   `gh pr create --base <base> --label gauntlet-reviewing --title ... --body ...` (no "Test plan"
-   section).
+3. Commit, push, open the PR off `<base>`, tagged with this run's owner label **and**
+   `gauntlet-reviewing`:
+   `gh pr create --base <base> --label gauntlet-run-<run-id> --label gauntlet-reviewing --title ... --body ...`
+   (no "Test plan" section).
 4. Return: finding id, branch, worktree path, PR number, one-line fix summary.
 
 For each PR: record it in `state.md` (status `in_review`, `started` = now, `attempts` += 1) and
@@ -415,7 +578,7 @@ after, **re-poll a fresh snapshot** into the file — that snapshot, not the wat
 
 ```
 # run in background. ';' (not '&&') so the re-poll ALWAYS runs, even when --watch exits non-zero on failure
-gh pr checks <pr> --watch ; gh pr checks <pr> > .tmp/review-gauntlet/ci-<pr>.txt
+gh pr checks <pr> --watch ; gh pr checks <pr> > <rundir>/ci-<pr>.txt
 ```
 
 The fix subagents only produce the fix + PR. They do NOT run reviews, watch CI, or merge — those
@@ -437,7 +600,10 @@ tip:
   with `/copilot-address-reviews <pr>` before reviewing (that skill verifies each item against source
   before changing code, works them one at a time, and resolves the threads). Detect them from a
   stored `gh` snapshot — the copilot skill's `fetch-review-items.sh` normalizes unresolved
-  Copilot-authored comments into `.tmp/copilot-review-items.json` — never scrape HTML. No items → no-op.
+  Copilot-authored comments into `.tmp/copilot-review-items.json` — never scrape HTML. That path is
+  **shared across runs**, so treat it as ephemeral: fetch immediately before acting and **verify the
+  JSON is for THIS PR** (re-fetch if a concurrent run overwrote it), and don't interleave two runs'
+  copilot-address cycles. No items → no-op.
 - **CI failures.** If `ci` is red for the current tip, do NOT review — fix CI first (Stage 2b).
   Handle failures **one at a time**, and **prefer a scoped subagent** per failure; use your own
   judgement on each fix.
@@ -466,7 +632,7 @@ its own context.
 
 ```
 codex exec --sandbox workspace-write -C $PROJECT/.worktrees/<branch> \
-  -o .tmp/review-gauntlet/review-<pr>-<n>.txt \
+  -o <rundir>/review-<pr>-<n>.txt \
   "Review the changes on this branch vs <base> (the whole git diff <base>...HEAD). List any issues with \
    file:line and a concrete fix. End with exactly one line: 'VERDICT: SATISFIED' or \
    'VERDICT: NOT SATISFIED'."   # run in background
@@ -564,8 +730,11 @@ the watch's exit code alone — always confirm against the re-polled snapshot.
 A PR is mergeable when the **current** `git rev-parse HEAD` equals `head_sha` AND `reviews_ok == 2`
 AND `ci == green` — i.e. two SATISFIED verdicts and green CI all recorded against the live tip.
 
-1. **Serialize** — merge at most one PR per wake. Before merging, re-confirm both gates still hold
-   for the current HEAD (a late push may have reset them).
+1. **Serialize** — merge at most one PR per wake. Before merging, re-confirm both gates still hold for
+   the current HEAD (a late push may have reset them), **and re-fetch `origin/<base>` and re-check
+   `gh pr view <pr> --json mergeable,mergeStateStatus`** — a concurrent run sharing this base may have
+   advanced it since the PR was last reviewed. If it now reads `BEHIND`/`DIRTY`/`CONFLICTING`, rebase
+   onto `<base>` and reset the gate per step 5 instead of merging.
 2. Push guard: `gh pr view <branch> --json state --jq .state` must be `OPEN`.
 3. Merge: `gh pr merge <pr> --squash --delete-branch` (use the repo's prevailing merge method if not
    squash).
@@ -573,6 +742,9 @@ AND `ci == green` — i.e. two SATISFIED verdicts and green CI all recorded agai
    `<base>` is now behind — and Stage 1 worktrees branch off it (`git worktree add … -b <branch>
    <base>`). Fast-forward it so every subsequent fan-out, rebase, and `<base>...HEAD` diff is measured
    against the just-merged tip, not a stale one (`<base>` = the run's base branch, not assumed `main`).
+   Local `<base>` is **shared** with any concurrent run on the same base; the fast-forward is
+   idempotent, so if another run already advanced it, a no-op "already up to date" is fine — just never
+   force it.
 
    **Run the fast-forward from wherever `<base>` is actually checked out** — don't assume it's the
    root checkout. A branch can be checked out in at most one working tree, so first locate that tree
@@ -605,9 +777,10 @@ AND `ci == green` — i.e. two SATISFIED verdicts and green CI all recorded agai
      **worktree** (`.worktrees/<branch>`) and delete the **local branch**.
    - Set status `merged` and stop its background tasks.
 
-   This runs only after the merge is verified, and only ever touches the skill's own `fix-*`
-   worktrees/branches (per the Authorization note). Leave the worktree in place if the merge cannot
-   be confirmed — treat that as a bailout condition, not a cleanup.
+   This runs only after the merge is verified, and only ever touches **this run's own**
+   `fix-<run-id>-*` worktrees/branches (per the Authorization note and the isolation invariant) — never
+   another run's. Leave the worktree in place if the merge cannot be confirmed — treat that as a
+   bailout condition, not a cleanup.
 
 ---
 
@@ -617,7 +790,7 @@ AND `ci == green` — i.e. two SATISFIED verdicts and green CI all recorded agai
   merging, abort it cleanly and **retry once** from a fresh worktree (`attempts` += 1, reset
   `started`).
 - On the **second** stuck/failure, abort permanently: stop work on that finding, write
-  `.tmp/review-gauntlet/abort-<id>.md` with the full history (reviews, CI failures, diffs, what
+  `<rundir>/abort-<id>.md` with the full history (reviews, CI failures, diffs, what
   blocked it), set status `aborted`, and **continue the other findings**.
 
 Other stop conditions — escalate rather than loop: a worktree won't build, codex keeps returning the
@@ -635,11 +808,26 @@ When the loop exits, summarize:
   user was asked about and declined (with the change each would have needed).
 - Any worktrees left for inspection.
 
-The same outcomes are appended to the durable carryover ledger (`.review-gauntlet/history.md`) on
-exit (Loop control step 5), so the next fresh run inherits them.
+The same outcomes are written to this run's durable carryover file
+(`.review-gauntlet/history/<run-id>.md`) on exit (Loop control step 5), so the next fresh run inherits them.
 
 ## Rules
 
+- Runs are isolated by `run_id`: a run touches ONLY its own `<rundir>`, its `state.md`, and PRs/branches
+  carrying its `gauntlet-run-<run-id>` label / `fix-<run-id>-` prefix. NEVER reconcile, review, fix,
+  merge, relabel, or clean up another run's work — scope every git/gh scan by that label or prefix.
+- One active driver per run, enforced by `<rundir>/lease.json` under an atomic `mkdir <rundir>/claim.lock`:
+  take/adopt a run only inside the claim lock, and adopt ONLY when its lease is absent or stale
+  (`now - updated` > ~30 min); refresh the lease every wake AND around long foreground ops; on a
+  self-wake whose lease is fresh but bears a different token, **stand down** — never double-drive a ledger.
+- Every self-wake carries `--run <run-id> --token <agent-token>` (ScheduleWakeup + background
+  completions); the token re-proves lease ownership so a summarized wake never mistakes its own run for
+  another's. Re-read `run_id` from the ledger each wake, never from memory.
+- Resume is intent-scoped: a fresh instance resumes via `--run <id>` or an **arg-less** bare invocation
+  (adopts the sole orphaned run). A **scoped** bare invocation and `--new` start an independent new run
+  and never pre-empt other live runs.
+- Carryover is **one file per run** under `.review-gauntlet/history/<run-id>.md`: a run writes and
+  prunes only its own file, so appends never contend and there's no shared-file rewrite to race.
 - NEVER pass destructive instructions (delete, force-push, reset) to `codex exec`.
 - NEVER use `--dangerously-bypass-approvals-and-sandbox`; always `--sandbox workspace-write`.
 - One finding = one tightly-scoped PR. Do not bundle unrelated fixes.
@@ -665,10 +853,10 @@ exit (Loop control step 5), so the next fresh run inherits them.
   (no Stage 0/1); a finished prior run → ask the user before a fresh run; `--new` → fresh run with
   carryover (Loop control step 1). A finished run must never silently exit "all fixed" or silently
   restart.
-- A fresh run carries over prior knowledge from `.review-gauntlet/history.md` (refuted to suppress,
+- A fresh run carries over prior knowledge from `.review-gauntlet/history/` (refuted to suppress,
   unresolved to re-surface, merged to dedup) but still judges every finding fresh — carryover is
   advisory, never auto-accept/reject.
-- Prune `.review-gauntlet/history.md` at every fresh run: drop only entries unambiguously moot against
+- Prune `.review-gauntlet/history/` at every fresh run: drop only entries unambiguously moot against
   current `<base>`; for anything uncertain, list it and ask the user before deleting. Never silently
   prune an entry you're unsure about.
 - If `codex exec` can't deliver a verdict (quota/rate-limit, auth, timeout, or other system error —
