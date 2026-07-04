@@ -665,29 +665,44 @@ an accepted PR's HEAD later advances — a CI fix, rebase, etc. — swap the lab
 (`--remove-label gauntlet-accepted --add-label gauntlet-reviewing`). Reconcile labels against the
 live gate state each wake so they never lie.
 
-### 2a-deep. Deep structured pass — break a whack-a-mole
+### 2a-deep. Root-cause pass — one decision made at N sites
 
-Watch the **shape** of successive `NOT SATISFIED` findings on one PR, not just their content. When
-each finding is a different *instance of one underlying pattern* — siblings in some finite space the
-code must cover exhaustively — the reviewer's lens is incomplete and per-finding fixes whack-a-mole:
-each round closes one instance, the next round finds another. Tell-tale sign: every fix looks like
-"add the same kind of handling to one more case."
+**The archetype — recognize it on sight.** The most common root cause behind a run of review findings
+is **one decision duplicated at N independent sites**: the same error-classification across every
+loader + caller, the same notation/resolution across every code path, the same attribute-value
+handling per read-site. Each site is a sibling in a finite space the code must cover **identically**.
+The fix is almost never per-site — it is a **single chokepoint every site routes through**, and the
+enumeration's whole job is to find **all N sites, including the ones no reviewer has hit yet**. Treat
+each review finding as a *symptom of the shared decision*, not a new problem.
 
-**Trigger** → ≥2–3 rounds whose findings are siblings in one structured space (same
-function/concept, different instance). Stop reactive per-finding patching; close the whole space at
-once:
+**Trigger on the finding's SHAPE, not on a round count.** Fire this the moment the **first** finding
+takes the form "this check / resolution / classification is missing (or wrong) at site X" — i.e. a
+decision applied independently at more than one site. Do **NOT** wait for the reviewer to surface
+sites 2..N over successive rounds — that is the reviewer mapping *your* space for you, one expensive
+review at a time. One such finding is enough to suspect the archetype and map the whole space now. (A
+string of `NOT SATISFIED` findings that are siblings in one structured space — same function/concept,
+different instance — is the same signal arriving late; treat it identically, and see the Bailout
+escalation rung, which forces this pass no later than the 2nd `NOT SATISFIED` on a PR.)
 
-1. **Name the space and enumerate it.** What is the finite set the code must cover, and what are its
-   axes? (Could be: the set of cases/inputs/states a function must handle; a `{variant} × {code-path}`
-   grid; both directions of a round-trip or other symmetric relation; every call site of one
-   operation that must behave identically. The axes are domain-specific — derive them from the
-   findings, don't assume a fixed shape.)
-2. **Dispatch a dedicated analysis subagent** — read-only, in a *fresh* worktree at the PR tip (NOT
-   the fix worktree). It ENUMERATES every cell, marks each `HANDLED` / `GAP` / `N-A` with a one-line
-   why, and returns a prioritized gap list — each gap with `file:line` + a minimal repro confirmed by
-   a throwaway test (deleted before it reports). Emit the enumeration as a literal table.
-3. **One batch-fix round** for all confirmed gaps. Factor the shared logic into ONE helper/path so the
-   cells can't diverge again. Add a test per cell.
+**Enumeration is a SEPARATE read-only pass — NEVER folded into a fix.**
+
+1. **Name the space and its axes.** What is the finite set every site must cover identically, and what
+   are its axes? (The set of cases/inputs/states a function must handle; a `{variant} × {code-path}`
+   grid; both directions of a round-trip or other symmetric relation; every call site of one operation
+   that must behave the same.) The axes are domain-specific — derive them from the finding, don't
+   assume a fixed shape.
+2. **Dispatch a dedicated MAPPER subagent whose SOLE deliverable is the map** — read-only, in a
+   *fresh* worktree at the PR tip (NOT the fix worktree). It enumerates every cell, marks each
+   `HANDLED` / `GAP` / `N-A` with a one-line why, and returns **the complete cell table + a
+   one-sentence root-cause statement** — each gap with `file:line` + a minimal repro confirmed by a
+   throwaway test (deleted before it reports). Emit the table literally.
+
+   **NEVER ask one subagent to both enumerate and fix.** A fixer under-maps toward what it can reach:
+   it finds the sites next to its diff and misses the caller two layers up or the code path it has no
+   handle on. A mapper carries no fix pressure, so it maps the space exhaustively — which is the point.
+   Enumeration and fix are two subagents, in that order, always.
+3. **One batch-fix round** for all confirmed gaps. Route every site through **ONE shared
+   chokepoint/helper** so the cells can't diverge again. Add a test per cell.
 4. **Resume the gauntlet** (two independent SATISFIED) on the batched result.
 
 Caveats:
@@ -792,6 +807,12 @@ AND `ci == green` — i.e. two SATISFIED verdicts and green CI all recorded agai
 - On the **second** stuck/failure, abort permanently: stop work on that finding, write
   `<rundir>/abort-<id>.md` with the full history (reviews, CI failures, diffs, what
   blocked it), set status `aborted`, and **continue the other findings**.
+- **Converging-but-expensively → escalate to the root-cause pass.** The bailouts above catch a *stuck*
+  task; this catches one that's *progressing by whack-a-mole*. A targeted per-finding fix is right for
+  the **first** `NOT SATISFIED` on a PR, or for genuinely independent findings. But on the **second**
+  `NOT SATISFIED` on the same PR, **stop targeted patching and run the §2a-deep root-cause pass** — map
+  the whole space with a dedicated read-only mapper and fix at one chokepoint. This is a hard backstop:
+  even if the archetype wasn't obvious on finding 1, the 2nd sibling finding forces the pass no later.
 
 Other stop conditions — escalate rather than loop: a worktree won't build, codex keeps returning the
 same unactionable verdict, or CI fails identically after a fix attempt.
@@ -842,6 +863,11 @@ The same outcomes are written to this run's durable carryover file
   prefer a scoped subagent), and rebase away any conflict with `<base>`. Each moves HEAD → verdicts
   reset. Never spend a review over open Copilot items, a red check, or a conflicting PR (Stage 2a).
 - Reviews are independent re-rolls: separate `codex exec` each pass, no shared context.
+- One decision at N sites is the most common root cause. Trigger the §2a-deep root-cause pass on the
+  **first** "missing/wrong at site X" finding (its shape, not a round count), map the whole space with
+  a dedicated **read-only mapper** subagent — never one that also fixes, which under-maps toward what
+  it can reach — and fix at a **single chokepoint**. Hard backstop: a 2nd `NOT SATISFIED` on one PR
+  forces the pass (Bailout).
 - The two reviews on a PR run **sequentially, never queued together**: launch the first, wait for its
   verdict, and launch the second **only if the first came back SATISFIED**. A NOT-SATISFIED first
   review means a fix lands and the SHA changes, so a concurrently-queued second review would be burned
