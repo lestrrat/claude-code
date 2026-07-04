@@ -59,7 +59,7 @@ This file is the seed for Codex.
 Run Codex to create the initial design:
 
 ```
-codex exec --full-auto "Read .tmp/design-chat/brief.md. Based on the brief, \
+codex exec --sandbox workspace-write "Read .tmp/design-chat/brief.md. Based on the brief, \
 create a detailed design document at .tmp/design-chat/design.md. \
 Include: overview, proposed approach, data flow, key interfaces/types, \
 file structure, edge cases, and open questions. \
@@ -104,7 +104,7 @@ Criteria for `approved`:
 Run Codex to revise:
 
 ```
-codex exec --full-auto "Read .tmp/design-chat/design.md (current design) \
+codex exec --sandbox workspace-write "Read .tmp/design-chat/design.md (current design) \
 and .tmp/design-chat/review-N.md (review feedback). \
 Revise the design in-place at .tmp/design-chat/design.md to address all must-fix issues. \
 Pay special attention to why-challenges — if the reviewer questioned your rationale, \

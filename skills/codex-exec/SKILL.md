@@ -23,11 +23,11 @@ Delegate a task to `codex exec` for non-interactive execution.
 2. Run:
 
 ```
-codex exec --full-auto -o .tmp/codex-output.txt "<prompt>"
+codex exec --sandbox workspace-write -o .tmp/codex-output.txt "<prompt>"
 ```
 
 Flags:
-- `--full-auto` → no approval prompts, workspace-write sandbox
+- `--sandbox workspace-write` (short `-s workspace-write`) → grant write access to the workspace. `codex exec` is already non-interactive, so no approval prompts. (Replaces the removed `--full-auto`.)
 - `-o .tmp/codex-output.txt` → capture final agent message
 - `-C <dir>` → set working directory if different from current
 
@@ -38,6 +38,6 @@ Flags:
 
 - NEVER pass destructive instructions (delete, force-push, reset) to codex exec.
 - NEVER use `--dangerously-bypass-approvals-and-sandbox`.
-- Always use `--full-auto` for sandboxed execution.
+- Always use `--sandbox workspace-write` for sandboxed execution.
 - Store output in `.tmp/` — NEVER `/tmp/`.
 - If codex exec fails or times out, fall back to handling the task directly.

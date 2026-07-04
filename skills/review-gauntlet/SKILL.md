@@ -335,7 +335,7 @@ This is a fallback for *system* failure, not a preference — use codex whenever
 1. Run the codex adversarial review. Scope = the arg if given, else the whole repo.
 
    ```
-   codex exec --full-auto -o .tmp/review-gauntlet/findings-raw.md \
+   codex exec --sandbox workspace-write -o .tmp/review-gauntlet/findings-raw.md \
      "Perform an adversarial code review of <SCOPE>. For each finding give: a stable ID, \
       severity, file:line, the defect, a concrete reproduction trigger, the impact, and a \
       concrete fix. Be hostile — surface everything that could be wrong. Do not edit code."
@@ -465,7 +465,7 @@ toward the two-independent-SATISFIED gate exactly like a codex pass — it's an 
 its own context.
 
 ```
-codex exec --full-auto -C $PROJECT/.worktrees/<branch> \
+codex exec --sandbox workspace-write -C $PROJECT/.worktrees/<branch> \
   -o .tmp/review-gauntlet/review-<pr>-<n>.txt \
   "Review the changes on this branch vs <base> (the whole git diff <base>...HEAD). List any issues with \
    file:line and a concrete fix. End with exactly one line: 'VERDICT: SATISFIED' or \
@@ -641,7 +641,7 @@ exit (Loop control step 5), so the next fresh run inherits them.
 ## Rules
 
 - NEVER pass destructive instructions (delete, force-push, reset) to `codex exec`.
-- NEVER use `--dangerously-bypass-approvals-and-sandbox`; always `--full-auto`.
+- NEVER use `--dangerously-bypass-approvals-and-sandbox`; always `--sandbox workspace-write`.
 - One finding = one tightly-scoped PR. Do not bundle unrelated fixes.
 - Fan-out is a **rolling cap (~8 in flight), never a barrier wave**: backfill each freed slot with the
   next `pending` finding immediately. Never let a draining group of findings stall the backlog —
