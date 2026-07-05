@@ -13,6 +13,12 @@ gauntlet, CI watching, and merges run centrally so verdicts and merge ordering s
 open/update PR → watch CI + review that PR's current HEAD. The gauntlet reviews GitHub PR heads, not
 unpublished local work. NEVER hold a fix locally until review passes before opening/updating the PR.
 
+**Work-conserving invariant.** Every wake must do all immediately useful work before returning:
+reconcile, fold completions, launch due fixes/reviews/CI fixes/precondition cleanup up to caps, and
+merge one ready PR. Return/reschedule only when every non-terminal item is either in flight, blocked
+on user/API approval, blocked only by a full cap, or waiting on external CI/review completion. NEVER
+wait for a batch, wave, job class, or single PR while another finding/PR has a launchable action.
+
 Act on each result the moment it lands. NEVER block on a whole batch.
 
 ## Args
@@ -314,9 +320,11 @@ completion is its own wake.
    add the status label if it has none. **Never touch another run's PRs.**
 2. **Fold in completions.** For any background task that finished (CI watch → `ci-<pr>.txt`; review →
    `review-<pr>-<n>.txt`), record the result against the SHA it ran on and act per Stage 2.
-3. **Dispatch due work — non-blocking, idempotent, bounded.** Launch only what is actually due *and
-   not already in flight* (check ground truth first, never the ledger alone). This owns **both** the
-   initial fan-out and all downstream work — there is no separate batched fan-out phase:
+3. **Dispatch due work — non-blocking, idempotent, bounded, work-conserving.** Scan the whole run,
+   not just the PR/job that woke you. Launch every due action that fits a free slot before returning.
+   Launch only what is actually due *and not already in flight* (check ground truth first, never the
+   ledger alone). This owns **both** the initial fan-out and all downstream work — there is no
+   separate batched fan-out phase:
    - any `pending` finding with no PR yet, while fewer than ~8 fix subagents are in flight → launch
      its fix subagent (Stage 1). This **backfills continuously**: as each fix subagent finishes and a
      slot frees, pull the next `pending` finding in — never wait for a whole group to drain before
@@ -331,6 +339,9 @@ completion is its own wake.
    Treat ~8 as a **rolling concurrency cap**, not a wave size: keep up to ~8 fix subagents and ~8
    review processes in flight, refilling each free slot immediately; queue the rest. **Launch, do not
    wait — never barrier on a group of findings before dispatching the next.**
+   Allowed idle state is narrow and explicit: no pending finding can launch, no PR can start a review,
+   no CI/precondition fix is due, no PR is mergeable, and every remaining wait is external
+   (background review/CI), user/API approval, or a genuinely full cap.
 4. **Merge** at most one queued PR this wake, serialized, after re-confirming its gate against the
    live SHA (Stage 3).
 5. **Reschedule or exit.**
@@ -862,6 +873,9 @@ The same outcomes are written to this run's durable carryover file
 - Fan-out is a **rolling cap (~8 in flight), never a barrier wave**: backfill each freed slot with the
   next `pending` finding immediately. Never let a draining group of findings stall the backlog —
   Loop-control step 3 owns this refill for both initial fan-out and resume.
+- Work-conserving dispatch is mandatory: every wake scans all findings/PRs and launches every due
+  action that fits a free slot before returning. Waiting is allowed only when no useful action is
+  launchable anywhere in the run.
 - Public API surface/behavior changes need user confirmation by default (see Constraints). The
   `api_changes` flag lives in the ledger header and is re-read every wake — never trust memory, never
   auto-merge an unapproved API break.
