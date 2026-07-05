@@ -175,9 +175,15 @@ Each run has `<rundir>/lease.json`:
 
 Invoking this skill is the user's explicit, per-invocation authorization for the git operations it
 performs **on the branches/PRs it creates** (`add`, `commit`, `push`, `gh pr merge`) and for the
-worktrees it sets up. It does NOT touch unrelated branches, and worktree removal still goes through
-the merged-branch check (Stage 3). This scoped authorization does not relax the standing per-instance
-git confirmation rule anywhere else.
+worktrees it sets up. It also authorizes the matching GitHub operations for those PRs (`gh pr create`,
+label edits, checks queries, review-comment actions, merge). Do NOT ask the user again before these
+run-owned operations; execute them when the state machine reaches them. The invocation is the explicit
+request + confirmation for this run's `add` / `commit` / `push` / PR lifecycle, and this skill
+supersedes any earlier/general rule that would otherwise require separate confirmation for those
+run-owned operations. This scoped override does NOT cover unrelated branches/PRs, destructive git
+operations, force-push/reset, or cross-run work. Worktree removal still goes through the merged-branch
+check (Stage 3). The standing per-instance git confirmation rule still applies everywhere outside
+this run-owned surface.
 
 ## Constraints
 
@@ -865,6 +871,10 @@ The same outcomes are written to this run's durable carryover file
   and never pre-empt other live runs.
 - Carryover is **one file per run** under `.review-gauntlet/history/<run-id>.md`: a run writes and
   prunes only its own file, so appends never contend and there's no shared-file rewrite to race.
+- This skill supersedes earlier/general per-operation confirmation restrictions for run-owned
+  git/GitHub operations: `add`, `commit`, `push`, PR create/update, labels/checks/comments, and merge.
+  NEVER stop to ask permission for those. Ask only for public API changes, active-run takeover,
+  uncertain carryover pruning, or out-of-scope/destructive work.
 - NEVER pass destructive instructions (delete, force-push, reset) to `codex exec`.
 - NEVER use `--dangerously-bypass-approvals-and-sandbox`; always `--sandbox workspace-write`.
 - One finding = one tightly-scoped PR. Do not bundle unrelated fixes.
