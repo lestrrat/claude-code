@@ -40,6 +40,10 @@ independent reviews on the same commit and CI is green. There's no approval step
 starting it is your sign-off — and a whole-repo run can spin up several PRs and keep going for a
 while before it's done.
 
+The loop is PR-first: it implements, commits, pushes, opens or updates the PR, then watches CI and
+reviews that PR's current HEAD. Review and CI fixes get another commit and push on the same PR; it
+doesn't keep work local until everything has passed.
+
 You can follow along on GitHub: each PR is labeled `gauntlet-reviewing` while it's working through
 the loop, and that flips to `gauntlet-accepted` once it has passed both reviews (the skill creates
 the labels if your repo doesn't have them).

@@ -9,6 +9,10 @@ A self-looping, reactive pipeline. **Codex is the adversarial reviewer; you (Cla
 orchestrator and implementer.** Fixes fan out in parallel, but you own every gate — the codex review
 gauntlet, CI watching, and merges run centrally so verdicts and merge ordering stay coherent.
 
+**PR-first invariant.** For every survivor and every follow-up fix: implement → commit → push →
+open/update PR → watch CI + review that PR's current HEAD. The gauntlet reviews GitHub PR heads, not
+unpublished local work. NEVER hold a fix locally until review passes before opening/updating the PR.
+
 Act on each result the moment it lands. NEVER block on a whole batch.
 
 ## Args
@@ -566,7 +570,8 @@ path; this Stage 1 description is just what each fix subagent does. Each subagen
 2. Implement the fix for **that finding only**, diff tight and scoped. If it would modify the public
    API surface or behavior, follow **Constraints**: under `ask`, park the finding (`awaiting-api`)
    and confirm with the user before changing anything; under `allowed`, proceed.
-3. Commit, push, open the PR off `<base>`, tagged with this run's owner label **and**
+3. Commit, push, open the PR off `<base>` **before any gauntlet review or CI gate**, tagged with this
+   run's owner label **and**
    `gauntlet-reviewing`:
    `gh pr create --base <base> --label gauntlet-run-<run-id> --label gauntlet-reviewing --title ... --body ...`
    (no "Test plan" section).
@@ -852,6 +857,8 @@ The same outcomes are written to this run's durable carryover file
 - NEVER pass destructive instructions (delete, force-push, reset) to `codex exec`.
 - NEVER use `--dangerously-bypass-approvals-and-sandbox`; always `--sandbox workspace-write`.
 - One finding = one tightly-scoped PR. Do not bundle unrelated fixes.
+- PR-first loop is mandatory: implement → commit → push → create/update PR → watch CI + review PR
+  HEAD. NEVER do local gauntlet reviews first and wait to push/open a PR until the end.
 - Fan-out is a **rolling cap (~8 in flight), never a barrier wave**: backfill each freed slot with the
   next `pending` finding immediately. Never let a draining group of findings stall the backlog —
   Loop-control step 3 owns this refill for both initial fan-out and resume.
