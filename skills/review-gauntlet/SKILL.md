@@ -261,9 +261,12 @@ phase: fanout           # reviewing (Stage 0) → fanout (Stage 1+); written at 
 id | slug | branch | worktree | pr | head_sha | reviews_ok | ci | attempts | started | status
 ```
 
-- `head_sha` — the branch tip (`git rev-parse HEAD`) that `reviews_ok` and `ci` describe. Both are
-  pinned to this SHA; if the live tip differs, they are stale (treat as 0 / `pending`).
-- `reviews_ok` — number of independent SATISFIED verdicts recorded against `head_sha` (need 2).
+- `head_sha` — the branch tip (`git rev-parse HEAD`) that `reviews_ok` and `ci` describe. `ci` is
+  pinned to this exact SHA. `reviews_ok` is pinned to this SHA **unless** the only change is a clean
+  base-only rebase/merge with the PR diff unchanged; then carry `reviews_ok` forward to the new
+  `head_sha` and set `ci = pending`.
+- `reviews_ok` — number of independent SATISFIED verdicts recorded against this PR's current content
+  (need 2).
 - `ci` — `green` / `red` / `pending` / `none` for `head_sha`.
 - `attempts` — task attempts so far (for the retry-once bailout).
 - `started` — wall-clock start of the current attempt (for the 1-hour cap).
@@ -369,9 +372,9 @@ completion is its own wake.
 
 **Idempotency is the load-bearing property.** Because every wake re-derives from git/gh and launches
 only work not already in flight, a relaunch after a killed session — or two completions landing close
-together — cannot corrupt state or act on a stale verdict (SHA-pinning rejects stale verdicts at the
-gate). The worst case is a wasted duplicate review, which is harmless: it's an independent re-roll
-anyway. The agent is also single-threaded per turn, so wake *decisions* never truly race — only
+together — cannot corrupt state or act on a stale verdict (PR-content pinning rejects stale verdicts
+at the gate). The worst case is a wasted duplicate review, which is harmless: it's an independent
+re-roll anyway. The agent is also single-threaded per turn, so wake *decisions* never truly race — only
 in-flight tasks do.
 
 **Resume after a killed session — including by a different agent instance:** in-flight background
@@ -613,9 +616,9 @@ are yours.
 ### 2a. The review gauntlet
 
 **Preconditions — clear Copilot items, CI, and conflicts before reviewing.** A codex review pass is
-expensive and is invalidated by any new commit, so never spend one on a PR whose current tip still
-has review-blocking issues. Before launching a pass, check three things and clear any that are dirty.
-Each fix moves HEAD, so `reviews_ok` resets to 0 (SHA-pinning) and the review re-starts on the clean
+expensive and is invalidated by any PR-content change, so never spend one on a PR whose current tip
+still has review-blocking issues. Before launching a pass, check three things and clear any that are
+dirty. Each fix changes PR content, so `reviews_ok` resets to 0 and the review re-starts on the clean
 tip:
 
 - **GitHub Copilot review items.** If the PR has any unresolved Copilot review comments, address them
@@ -630,9 +633,10 @@ tip:
   Handle failures **one at a time**, and **prefer a scoped subagent** per failure; use your own
   judgement on each fix.
 - **Merge conflicts with `<base>`.** If GitHub flags the PR conflicting/behind
-  (`gh pr view <pr> --json mergeable,mergeStateStatus` → `CONFLICTING` / `DIRTY`), rebase it onto
-  `<base>` and resolve the conflict before reviewing — a conflict-resolving rebase changes code, so
-  it resets the gate (Stage 3 step 5).
+  (`gh pr view <pr> --json mergeable,mergeStateStatus` → `CONFLICTING` / `DIRTY` / `BEHIND`), rebase
+  it onto `<base>` before reviewing. Clean rebase with the PR diff unchanged keeps `reviews_ok` but
+  sets `ci = pending`; conflict-resolving rebase changes PR content, so it resets the gate (Stage 3
+  step 5).
 
 Only launch a review pass once all three are clear for the current tip.
 
@@ -673,18 +677,23 @@ As each verdict lands, tally it for the SHA it ran on:
 Every pass reviews the whole `<base>...HEAD` diff (not just the last fix-delta), so accumulated fixes
 are always judged as one piece.
 
-**Gate is two independent SATISFIED verdicts on the same HEAD SHA.** Record the reviewed SHA
-(`git rev-parse HEAD`) with each pass. A verdict counts only while its SHA equals the live tip; the
-moment HEAD advances — review fix, CI fix, conflict-resolving rebase, a formatter/bot commit, or a
-base merge — every earlier verdict is stale and `reviews_ok` drops to 0. Pinning to the SHA (rather
-than trusting yourself to remember to reset) makes the gate verifiable from git and catches commits
-you didn't initiate. A `NOT SATISFIED` invalidates the SHA's tally even before a fix lands. The two
-satisfied verdicts and green CI must all describe the *same* HEAD SHA.
+**Gate is two independent SATISFIED verdicts on the same PR content.** Record the reviewed SHA
+(`git rev-parse HEAD`) with each pass. A verdict counts while its SHA equals the live tip. It also
+continues to count after `<base>` advances if the PR is still non-conflicting and the PR diff/content
+is unchanged (e.g. clean base-only rebase); carry `reviews_ok` forward to the new `head_sha` and set
+`ci = pending`. The moment PR content changes — review fix, CI fix, conflict-resolving rebase, a
+formatter/bot commit on the PR branch, or manual push — earlier verdicts are stale and `reviews_ok`
+drops to 0. Pinning to SHA plus the clean-base-only exception makes the gate verifiable from git while
+not burning reviews merely because another PR merged cleanly. A `NOT SATISFIED` invalidates that
+content's tally even before a fix lands. The two satisfied verdicts and green CI must all describe the
+same live PR content; CI must still be green for the current HEAD SHA.
 
 **Status labels mirror the review gate.** A PR carries `gauntlet-reviewing` until its current HEAD
-holds two SATISFIED verdicts, then `gauntlet-accepted`. Because any code change resets the gate, if
-an accepted PR's HEAD later advances — a CI fix, rebase, etc. — swap the label back
-(`--remove-label gauntlet-accepted --add-label gauntlet-reviewing`). Reconcile labels against the
+holds two SATISFIED verdicts for the same live PR content, then `gauntlet-accepted`. Because any
+PR-content change resets the gate, if an accepted PR's content later changes — a CI fix,
+conflict-resolving rebase, formatter/bot commit, etc. — swap the label back
+(`--remove-label gauntlet-accepted --add-label gauntlet-reviewing`). A clean base-only rebase with
+unchanged PR diff keeps the review label state but sets `ci = pending`. Reconcile labels against the
 live gate state each wake so they never lie.
 
 ### 2a-deep. Root-cause pass — one decision made at N sites
@@ -771,7 +780,7 @@ AND `ci == green` — i.e. two SATISFIED verdicts and green CI all recorded agai
    the current HEAD (a late push may have reset them), **and re-fetch `origin/<base>` and re-check
    `gh pr view <pr> --json mergeable,mergeStateStatus`** — a concurrent run sharing this base may have
    advanced it since the PR was last reviewed. If it now reads `BEHIND`/`DIRTY`/`CONFLICTING`, rebase
-   onto `<base>` and reset the gate per step 5 instead of merging.
+   onto `<base>` and apply step 5 instead of blindly resetting the review gate.
 2. Push guard: `gh pr view <branch> --json state --jq .state` must be `OPEN`.
 3. Merge: `gh pr merge <pr> --squash --delete-branch` (use the repo's prevailing merge method if not
    squash).
@@ -801,11 +810,11 @@ AND `ci == green` — i.e. two SATISFIED verdicts and green CI all recorded agai
    Fast-forward only — never a merge commit or reset. If the fast-forward fails (local `<base>` somehow
    diverged), do NOT force it: that's a bailout condition (stop and surface it), since branching new
    fixes off a wrong base would corrupt every downstream diff.
-5. After the merge, other open PRs may be stale. **Rebase only if** GitHub flags the PR
-   behind/conflicting:
-   - Clean rebase (no conflicts) → the PR's own diff is unchanged → keep `reviews_ok`, but `ci` goes
-     `pending` and must return green before merging.
-   - Rebase requiring conflict resolution → code changed → **reset `reviews_ok` to 0**, re-enter
+5. After the merge, other open PRs may need a base refresh. **Base advancement alone does NOT invalidate
+   gauntlet reviews.** Rebase only if GitHub flags the PR behind/conflicting:
+   - Clean rebase (no conflicts) → verify the PR's own diff/content is unchanged → keep `reviews_ok`,
+     update `head_sha` to the new tip, but set `ci = pending`; CI must return green before merging.
+   - Rebase requiring conflict resolution → PR content changed → **reset `reviews_ok` to 0**, re-enter
      Stage 2.
 6. **Clean up on successful merge.** Once the merge is confirmed (`gh pr view <branch> --json state
    --jq .state` → `MERGED`), tear down that PR's local footprint:
@@ -891,8 +900,9 @@ The same outcomes are written to this run's durable carryover file
   auto-merge an unapproved API break.
 - Before queueing a review pass on a PR, clear its preconditions on the current tip: address any
   GitHub Copilot review items (`/copilot-address-reviews <pr>`), fix any CI failures (one at a time,
-  prefer a scoped subagent), and rebase away any conflict with `<base>`. Each moves HEAD → verdicts
-  reset. Never spend a review over open Copilot items, a red check, or a conflicting PR (Stage 2a).
+  prefer a scoped subagent), and rebase away any conflict with `<base>`. PR-content changes reset
+  verdicts. Clean base-only rebase with unchanged PR diff keeps `reviews_ok` and sets `ci = pending`.
+  Never spend a review over open Copilot items, a red check, or a conflicting PR (Stage 2a).
 - Reviews are independent re-rolls: separate `codex exec` each pass, no shared context.
 - One decision at N sites is the most common root cause. Trigger the §2a-deep root-cause pass on the
   **first** "missing/wrong at site X" finding (its shape, not a round count), map the whole space with
@@ -904,8 +914,10 @@ The same outcomes are written to this run's durable carryover file
   review means a fix lands and the SHA changes, so a concurrently-queued second review would be burned
   on a commit that's about to be replaced — wasted tokens. (Reviews for *different* PRs still run
   concurrently; only the two for the same PR serialize. See Stage 2a.)
-- Verdicts are pinned to the reviewed HEAD SHA: any new commit (incl. rebase / base-merge / bot
-  commit) makes prior verdicts stale. Re-derive from `git rev-parse HEAD`, don't trust memory.
+- Verdicts are pinned to reviewed PR content: any PR-content change (review fix / CI fix /
+  conflict-resolving rebase / bot or manual PR-branch commit) makes prior verdicts stale. Base
+  advancement with no conflict and unchanged PR diff does NOT invalidate verdicts; carry `reviews_ok`
+  forward, update `head_sha`, and require fresh CI.
 - Resume vs. fresh run is decided by **liveness**, not by `state.md` existing: live work → resume
   (no Stage 0/1); a finished prior run → ask the user before a fresh run; `--new` → fresh run with
   carryover (Loop control step 1). A finished run must never silently exit "all fixed" or silently
