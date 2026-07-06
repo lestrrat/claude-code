@@ -133,4 +133,4 @@ flowchart TD
   runs learned. That's the memory a fresh run carries over. Each fresh run also tidies that file,
   dropping entries that no longer apply to the current code — and when it isn't sure an entry is
   safe to drop, it asks you first rather than guessing.
-- Full mechanics live in [`SKILL.md`](./SKILL.md).
+- Full mechanics live in [`SKILL.md`](./SKILL.md) and [`references/`](./references/).
