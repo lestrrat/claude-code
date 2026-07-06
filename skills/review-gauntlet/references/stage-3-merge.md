@@ -3,11 +3,12 @@
 A PR is mergeable when the **current** `git rev-parse HEAD` equals `head_sha` AND `reviews_ok == 2`
 AND `ci == green` — i.e. two SATISFIED verdicts and green CI all recorded against the live tip.
 
-1. **Serialize** — merge at most one PR per wake. Before merging, re-confirm both gates still hold for
-   the current HEAD (a late push may have reset them), **and re-fetch `origin/<base>` and re-check
-   `gh pr view <pr> --json mergeable,mergeStateStatus`** — a concurrent run sharing this base may have
-   advanced it since the PR was last reviewed. If it now reads `BEHIND`/`DIRTY`/`CONFLICTING`, rebase
-   onto `<base>` and apply step 5 instead of blindly resetting the review gate.
+1. **Serialize merge operations, not wakes.** A wake may merge multiple PRs, but only one at a time.
+   Before each merge, re-confirm both gates still hold for the current HEAD (a late push may have
+   reset them), **and re-fetch `origin/<base>` and re-check
+   `gh pr view <pr> --json mergeable,mergeStateStatus`** — a concurrent run sharing this base may
+   have advanced it since the PR was last reviewed. If it now reads `BEHIND`/`DIRTY`/`CONFLICTING`,
+   refresh the PR per step 6 instead of merging it.
 2. Push guard: `gh pr view <branch> --json state --jq .state` must be `OPEN`.
 3. Merge: `gh pr merge <pr> --squash --delete-branch` (use the repo's prevailing merge method if not
    squash).
@@ -37,13 +38,7 @@ AND `ci == green` — i.e. two SATISFIED verdicts and green CI all recorded agai
    Fast-forward only — never a merge commit or reset. If the fast-forward fails (local `<base>` somehow
    diverged), do NOT force it: that's a bailout condition (stop and surface it), since branching new
    fixes off a wrong base would corrupt every downstream diff.
-5. After the merge, other open PRs may need a base refresh. **Base advancement alone does NOT invalidate
-   gauntlet reviews.** Rebase only if GitHub flags the PR behind/conflicting:
-   - Clean rebase (no conflicts) → verify the PR's own diff/content is unchanged → keep `reviews_ok`,
-     update `head_sha` to the new tip, but set `ci = pending`; CI must return green before merging.
-   - Rebase requiring conflict resolution → PR content changed → **reset `reviews_ok` to 0**, re-enter
-     Stage 2.
-6. **Clean up on successful merge.** Once the merge is confirmed (`gh pr view <branch> --json state
+5. **Clean up on successful merge.** Once the merge is confirmed (`gh pr view <branch> --json state
    --jq .state` → `MERGED`), tear down that PR's local footprint:
    - `--delete-branch` above already removed the **remote** branch.
    - Verify the merge with the `git-detect-merged` skill, then use `git-cleanup-merged` to remove the
@@ -54,5 +49,15 @@ AND `ci == green` — i.e. two SATISFIED verdicts and green CI all recorded agai
    `fix-<run-id>-*` worktrees/branches (per the Authorization note and the isolation invariant) — never
    another run's. Leave the worktree in place if the merge cannot be confirmed — treat that as a
    bailout condition, not a cleanup.
+6. After each merge+sync+cleanup, reconcile other open PRs. **Base advancement alone does NOT
+   invalidate gauntlet reviews.** Rebase only if GitHub flags the PR behind/conflicting:
+   - Clean rebase (no conflicts) → verify the PR's own diff/content is unchanged → keep `reviews_ok`,
+     update `head_sha` to the new tip, but set `ci = pending`; CI must return green before merging.
+   - Rebase requiring conflict resolution → PR content changed → **reset `reviews_ok` to 0**, re-enter
+     Stage 2.
+   - Still open, mergeable, not behind/dirty/conflicting, same live `head_sha`, `reviews_ok == 2`,
+     and `ci == green` → still immediately mergeable; return to step 1 in the same wake.
+
+Stop the merge loop only when no remaining PR is immediately mergeable after the latest base refresh.
 
 ---

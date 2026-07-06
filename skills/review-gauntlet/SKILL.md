@@ -54,7 +54,7 @@ Read stage refs only when that stage/action is due:
 
 - **PR-first:** implement -> commit -> push -> open/update PR -> watch CI + review PR HEAD.
 - **Work-conserving:** every wake reconciles, folds completions, launches all due work up to caps,
-  merges one ready PR, then reschedules only when no useful action remains launchable.
+  drains still-ready PRs serially, then reschedules only when no useful action remains launchable.
 - **Run isolation:** touch only this run's `<rundir>`, ledger, labels, branches, PRs, and worktrees.
 - **One active driver:** lease controls ownership; never double-drive one run.
 - **Base branch is data:** read `base_branch` from ledger every wake; never assume `main`.
@@ -71,7 +71,7 @@ Read stage refs only when that stage/action is due:
 2. Reconcile state from git + GitHub; treat `state.md` as cache.
 3. Fold completed review/CI/fix tasks.
 4. Launch due Stage 0/1/2/CI/base-refresh work up to caps.
-5. Merge at most one ready PR.
+5. Merge ready PRs one at a time until no candidate remains immediately ready after base refresh.
 6. Update carryover/final state if terminal; otherwise refresh lease and schedule next wake.
 
 ## Critical Rules

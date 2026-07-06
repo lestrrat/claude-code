@@ -68,7 +68,7 @@ completion is its own wake.
      a time per PR — the second only after the first is SATISFIED; Stage 2a). If a precondition is
      dirty, clear it first (address Copilot items / fix CI / rebase) instead of spending a review;
    - CI red and no fix in flight → dispatch a scoped fix subagent (Stage 2b);
-   - mergeable → queue for merge.
+   - mergeable → queue for serialized merge drain.
    Treat ~8 as a **rolling concurrency cap**, not a wave size: keep up to ~8 fix subagents and ~8
    review processes in flight, refilling each free slot immediately; queue the rest. **Launch, do not
    wait — never barrier on a group of findings before dispatching the next.**
