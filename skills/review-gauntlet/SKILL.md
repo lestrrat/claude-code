@@ -1,6 +1,7 @@
 ---
 name: review-gauntlet
-description: Self-looping adversarial-review-to-merge pipeline. Codex runs an adversarial review (a given area/topic, else the whole repo), findings are neutrally verified, each survivor becomes its own PR, and a per-PR review gauntlet (two independent SATISFIED verdicts on the same commit, reviewed one at a time over the whole diff) plus event-driven CI monitoring gate an auto-merge. Multiple isolated runs (each keyed by a run-id, with a lease so only one agent drives each) can run concurrently in one repo. Drives its own loop via ScheduleWakeup — invoke once, no /loop wrapper. Args: [--run <id>] [area or topic]
+description: >-
+  Self-looping adversarial-review-to-merge pipeline. Codex runs an adversarial review (a given area/topic, else the whole repo), findings are neutrally verified, each survivor becomes its own PR, and a per-PR review gauntlet (two independent SATISFIED verdicts on the same commit, reviewed one at a time over the whole diff) plus event-driven CI monitoring gate an auto-merge. Multiple isolated runs (each keyed by a run-id, with a lease so only one agent drives each) can run concurrently in one repo. Drives its own loop via ScheduleWakeup — invoke once, no /loop wrapper. Args: [--run id] [area or topic]
 ---
 
 # Review Gauntlet
@@ -228,6 +229,8 @@ files from colliding — see "Run identity and concurrency".
 | `state.md` | Live per-finding ledger — a **cache/hint**, not the source of truth (see below) |
 | `lease.json` | This run's active-driver lease (`{agent, updated}`; see "Run lease") |
 | `review-<pr>-<n>.txt` | Codex's PR review output, round `n` |
+| `review-<pr>-<n>.plan.jsonl` | Orchestrator-authored review work units for round `n` |
+| `review-<pr>-<n>.progress.jsonl` | Reviewer progress events against the plan for round `n` |
 | `ci-<pr>.txt` | Latest `gh pr checks` snapshot for a PR (re-polled after the watch, not the watch stream) |
 | `abort-<id>.md` | Detailed log for an aborted finding-task |
 
@@ -328,7 +331,8 @@ completion is its own wake.
    `gauntlet-accepted` if its current HEAD holds two SATISFIED verdicts, else `gauntlet-reviewing`;
    add the status label if it has none. **Never touch another run's PRs.**
 2. **Fold in completions.** For any background task that finished (CI watch → `ci-<pr>.txt`; review →
-   `review-<pr>-<n>.txt`), record the result against the SHA it ran on and act per Stage 2.
+   `review-<pr>-<n>.txt`, with `review-<pr>-<n>.progress.jsonl` as its liveness evidence), record
+   the result against the SHA it ran on and act per Stage 2.
 3. **Dispatch due work — non-blocking, idempotent, bounded, work-conserving.** Scan the whole run,
    not just the PR/job that woke you. Launch every due action that fits a free slot before returning.
    Launch only what is actually due *and not already in flight* (check ground truth first, never the
@@ -500,9 +504,10 @@ report that the pass ran on the Claude-subagent fallback.
   already describes), writing findings to `findings-raw.md` in the same shape codex would have. The
   neutral verification pass (Stage 0 step 2) is unchanged.
 - **Stage 2a (per-PR review)** → spawn a **fresh** subagent to review the whole `<base>...HEAD` diff
-  with an equally adversarial pass, ending in exactly one `VERDICT: SATISFIED` / `VERDICT: NOT
-  SATISFIED` line. Each fallback pass is still an independent re-roll in its own subagent/context, so
-  the two-independent-SATISFIED gate holds exactly as it does with codex.
+  with an equally adversarial pass, using the same `review-<pr>-<n>.plan.jsonl` /
+  `review-<pr>-<n>.progress.jsonl` protocol and ending in exactly one `VERDICT: SATISFIED` /
+  `VERDICT: NOT SATISFIED` line. Each fallback pass is still an independent re-roll in its own
+  subagent/context, so the two-independent-SATISFIED gate holds exactly as it does with codex.
 
 This is a fallback for *system* failure, not a preference — use codex whenever it can actually run.
 
@@ -656,12 +661,61 @@ whole `<base>...HEAD` diff and ending in the same `VERDICT:` line. A subagent fa
 toward the two-independent-SATISFIED gate exactly like a codex pass — it's an independent re-roll in
 its own context.
 
+**Review work-plan ledger — orchestrator-owned, target-generic.** Before launching each review pass,
+write `<rundir>/review-<pr>-<n>.plan.jsonl`. The orchestrator owns the plan; the reviewer reports
+progress against it but does NOT redefine it. Derive units from the review target, not from fixed
+global stages:
+
+- **Code PR default** → changed files/modules, public API/behavior boundaries, cross-file invariants,
+  tests/coverage relevant to changed behavior, migration/docs/golden updates when touched.
+- **Docs/articles/non-code** → artifact/section units, claim-support/evidence checks, structure/flow,
+  tone/audience, repetition, terminology/cross-document consistency, citations/sources if present.
+- **Mixed target** → include both code-shaped and artifact-shaped units.
+
+Plan JSONL schema:
+
+```
+{"type":"unit","id":"u01","kind":"file","target":"xsd/validate_idc.go","checks":["value canonicalization","union member selection"]}
+{"type":"unit","id":"u02","kind":"cross-cutting","target":"IDC key equality","checks":["primitive tags","list boundaries","keyref parity"]}
+```
+
+Rules:
+
+- Keep units auditable and finite. Prefer 5–15 units; split huge units, merge tiny mechanical ones.
+- Each unit MUST name concrete `target` + concrete `checks`.
+- For code, include at least one cross-cutting unit when behavior spans files or packages.
+- For non-code, include at least one cross-artifact/whole-piece unit when multiple artifacts/sections
+  exist.
+- The reviewer may append a `plan_amendment_request` event when the plan is materially wrong or
+  incomplete, but unapproved amendments do NOT count as plan units. The orchestrator folds that request
+  on the next wake and either updates the plan + restarts the review pass, or ignores it with a note.
+
+Progress JSONL schema:
+
+```
+{"type":"progress","unit":"u01","status":"started","ts":"2026-07-06T00:00:00Z"}
+{"type":"progress","unit":"u01","status":"done","ts":"2026-07-06T00:04:00Z","evidence":"checked canonicalization paths and edge-case tests"}
+{"type":"plan_amendment_request","ts":"2026-07-06T00:05:00Z","reason":"diff changes generated docs; add doc consistency unit","proposed_unit":{"id":"u99","kind":"docs","target":"docs/generated.md","checks":["sync with API behavior"]}}
+```
+
+Meaningful progress = a `done` event for a planned unit, or an accepted plan amendment. `started`
+events and vague "still working" lines prove only process liveness and MUST NOT reset the meaningful
+progress timer. The reviewer MUST append progress events immediately as units complete, not batch them
+at final output. If no meaningful progress lands for ~15 min while the review process is still alive,
+mark the review suspicious; if it remains stale on the next wake, treat it as a codex system failure:
+retry once, then use the fresh-subagent fallback. Ignore any late verdict from a stale/superseded
+attempt unless its attempt id still matches the active review pass.
+
 ```
 codex exec --sandbox workspace-write -C $PROJECT/.worktrees/<branch> \
   -o <rundir>/review-<pr>-<n>.txt \
-  "Review the changes on this branch vs <base> (the whole git diff <base>...HEAD). List any issues with \
-   file:line and a concrete fix. End with exactly one line: 'VERDICT: SATISFIED' or \
-   'VERDICT: NOT SATISFIED'."   # run in background
+  "Review the changes on this branch vs <base> (the whole git diff <base>...HEAD). \
+   First read $PROJECT/<rundir>/review-<pr>-<n>.plan.jsonl. Append progress JSONL to \
+   $PROJECT/<rundir>/review-<pr>-<n>.progress.jsonl as each planned unit starts and finishes; \
+   progress counts only when it references a planned unit and includes concrete evidence. \
+   Do not rewrite the plan; request an amendment in progress JSONL if needed. \
+   List any issues with file:line and a concrete fix. End with exactly one line: \
+   'VERDICT: SATISFIED' or 'VERDICT: NOT SATISFIED'."   # run in background
 ```
 
 As each verdict lands, tally it for the SHA it ran on:
@@ -904,6 +958,10 @@ The same outcomes are written to this run's durable carryover file
   verdicts. Clean base-only rebase with unchanged PR diff keeps `reviews_ok` and sets `ci = pending`.
   Never spend a review over open Copilot items, a red check, or a conflicting PR (Stage 2a).
 - Reviews are independent re-rolls: separate `codex exec` each pass, no shared context.
+- Before each review, write an orchestrator-owned `review-<pr>-<n>.plan.jsonl`; reviewers append
+  `review-<pr>-<n>.progress.jsonl` events against planned units. Meaningful progress = planned unit
+  `done` or accepted plan amendment, not vague "still working" output. Stale meaningful progress →
+  suspicious review → retry/fallback per Stage 2a.
 - One decision at N sites is the most common root cause. Trigger the §2a-deep root-cause pass on the
   **first** "missing/wrong at site X" finding (its shape, not a round count), map the whole space with
   a dedicated **read-only mapper** subagent — never one that also fixes, which under-maps toward what
