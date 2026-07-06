@@ -1,13 +1,5 @@
 # Git Operations
 
-## Permissions
-
-Free (no confirmation): `log`, `diff`, `status`, `show`, `stash`, `cherry`, `fetch`, `ls-tree`, `worktree add/list`
-
-REQUIRES explicit user request + confirmation EVERY time: `commit`, `push`, `add`, `worktree remove`, `--force`
-
-Approval is PER-INSTANCE. NEVER infer standing permission.
-
 ## Commit & PR Messages
 
 Read `~/.claude/docs/git-messages.md` first.
@@ -26,7 +18,7 @@ Path: `$PROJECT/.worktrees/<branch>`
 |--------|---------|
 | New branch | `git worktree add $PROJECT/.worktrees/<branch> -b <branch>` |
 | Existing branch | `git worktree add $PROJECT/.worktrees/<branch> <branch>` |
-| Remove (confirm) | `git worktree remove $PROJECT/.worktrees/<branch>` |
+| Remove | `git worktree remove $PROJECT/.worktrees/<branch>` |
 
 Worktree directory name MUST match its checked-out branch. NEVER `git checkout <other-branch>` inside a worktree — the branch name is fixed to the worktree name for its entire lifetime.
 
