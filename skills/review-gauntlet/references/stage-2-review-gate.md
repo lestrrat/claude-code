@@ -17,8 +17,8 @@ tip:
   JSON is for THIS PR** (re-fetch if a concurrent run overwrote it), and don't interleave two runs'
   copilot-address cycles. No items → no-op.
 - **CI failures.** If `ci` is red for the current tip, do NOT review — fix CI first (Stage 2b).
-  Handle failures **one at a time**, and **prefer a scoped subagent** per failure; use your own
-  judgement on each fix.
+  Handle failures **one at a time per PR/SHA**, and **prefer a scoped subagent** per failure; different
+  PRs may fix CI concurrently within the cap.
 - **Merge conflicts with `<base>`.** If GitHub flags the PR conflicting/behind
   (`gh pr view <pr> --json mergeable,mergeStateStatus` → `CONFLICTING` / `DIRTY` / `BEHIND`), rebase
   it onto `<base>` before reviewing. Clean rebase with the PR diff unchanged keeps `reviews_ok` but

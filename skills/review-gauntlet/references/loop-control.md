@@ -67,7 +67,8 @@ completion is its own wake.
      and no review running for that SHA → launch **one** review pass as a **background** task (one at
      a time per PR — the second only after the first is SATISFIED; Stage 2a). If a precondition is
      dirty, clear it first (address Copilot items / fix CI / rebase) instead of spending a review;
-   - CI red and no fix in flight → dispatch a scoped fix subagent (Stage 2b);
+   - CI red and no CI-fix subagent is already in flight for that PR/SHA → dispatch a scoped fix
+     subagent (Stage 2b); different PRs may fix CI concurrently within the cap.
    - mergeable → queue for serialized merge drain.
    Treat ~8 as a **rolling concurrency cap**, not a wave size: keep up to ~8 fix subagents and ~8
    review processes in flight, refilling each free slot immediately; queue the rest. **Launch, do not
@@ -75,8 +76,9 @@ completion is its own wake.
    Allowed idle state is narrow and explicit: no pending finding can launch, no PR can start a review,
    no CI/precondition fix is due, no PR is mergeable, and every remaining wait is external
    (background review/CI), user/API approval, or a genuinely full cap.
-4. **Merge** at most one queued PR this wake, serialized, after re-confirming its gate against the
-   live SHA (Stage 3).
+4. **Merge** queued PRs as a serialized drain: re-confirm one candidate against the live SHA, merge
+   it, sync `<base>`, reconcile remaining candidates, and repeat while another PR is immediately
+   mergeable (Stage 3).
 5. **Reschedule or exit.**
    - Any non-terminal PR remains → refresh this run's lease, then set a `ScheduleWakeup` heartbeat
      (`prompt: "/review-gauntlet --run <run-id> --token <agent-token> <args>"` — `--run` rebinds the

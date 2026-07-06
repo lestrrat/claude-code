@@ -17,4 +17,7 @@ the watch exit code**:
 Every CI failure must be handled; never merge over a red or pending check, and never infer green from
 the watch's exit code alone — always confirm against the re-polled snapshot.
 
+CI fixes serialize only within one PR/SHA. Different PRs with red CI may run scoped CI-fix subagents
+concurrently within the dispatcher cap.
+
 ---
