@@ -55,6 +55,10 @@ Read stage refs only when that stage/action is due:
 - **PR-first:** implement -> commit -> push -> open/update PR -> watch CI + review PR HEAD.
 - **Work-conserving:** every wake reconciles, folds completions, launches all due work up to caps,
   drains still-ready PRs serially, then reschedules only when no useful action remains launchable.
+- **Driver never blocks:** sweeps, verifications, reviews, and CI watches run as background tasks —
+  completions are wakes. Stage 0 pipelines into fan-out (survivors fix while later shards sweep).
+  A pending-CI PR always has a live watch; a review doomed by a pending content change is stopped,
+  not awaited.
 - **Run isolation:** touch only this run's `<rundir>`, ledger, labels, branches, PRs, and worktrees.
 - **One active driver:** lease controls ownership; never double-drive one run.
 - **Base branch is data:** read `base_branch` from ledger every wake; never assume `main`.
@@ -69,8 +73,9 @@ Read stage refs only when that stage/action is due:
 
 1. Resolve run + lease; adopt only absent/stale lease, stand down if fresh different owner.
 2. Reconcile state from git + GitHub; treat `state.md` as cache.
-3. Fold completed review/CI/fix tasks.
-4. Launch due Stage 0/1/2/CI/base-refresh work up to caps.
+3. Fold completed sweep/verification/review/CI/fix tasks.
+4. Launch all due work up to caps — sweep shards, verification chunks, fix fan-out, reviews, CI
+   watches/fixes, base refresh; stop in-flight reviews doomed by a content change.
 5. Merge ready PRs one at a time until no candidate remains immediately ready after base refresh.
 6. Update carryover/final state if terminal; otherwise refresh lease and schedule next wake.
 

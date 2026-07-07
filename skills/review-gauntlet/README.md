@@ -44,6 +44,10 @@ The loop is PR-first: it implements, commits, pushes, opens or updates the PR, t
 reviews that PR's current HEAD. Review and CI fixes get another commit and push on the same PR; it
 doesn't keep work local until everything has passed.
 
+It also doesn't wait around. On a big scope the review sweep runs in slices, and fixes start flowing
+as soon as the first findings are confirmed — while the rest of the sweep is still going. Everything
+long-running happens in the background, so at any moment it's doing all the work that's ready to do.
+
 You can follow along on GitHub: each PR is labeled `gauntlet-reviewing` while it's working through
 the loop, and that flips to `gauntlet-accepted` once it has passed both reviews (the skill creates
 the labels if your repo doesn't have them).
@@ -69,15 +73,15 @@ flowchart TD
     A1 -->|"nothing yet / --new"| B
     B{area or topic given?}
     B -- yes --> C[codex reviews that area]
-    B -- no --> D[codex whole-repo sweep]
-    C --> E[neutral verification pass]
+    B -- no --> D[codex whole-repo sweep, in slices]
+    C --> E["neutral verification pass<br/>(streamed: each slice verifies as it lands)"]
     D --> E
     E --> F{more than 10 findings?}
-    F -- yes --> G[parallel verifier shards] --> H[reconcile survivors: dedup + cross-ref]
+    F -- yes --> G[parallel verifier shards] --> H[dedup each survivor against the run's set on arrival]
     F -- no --> I[single verifier]
     H --> J
     I --> J[survivors = CONFIRMED or ADJUSTED]
-    J --> K[Stage 1: fan out - one PR per finding]
+    J --> K[Stage 1: fan out - one PR per finding,<br/>starting while the sweep continues]
     K --> L0[per finding: worktree off base branch, implement the fix]
     L0 --> AB{changes public API surface or behavior?}
     AB -- no --> L[commit, push, open PR, launch CI watch]

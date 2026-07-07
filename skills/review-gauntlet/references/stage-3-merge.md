@@ -52,9 +52,11 @@ AND `ci == green` — i.e. two SATISFIED verdicts and green CI all recorded agai
 6. After each merge+sync+cleanup, reconcile other open PRs. **Base advancement alone does NOT
    invalidate gauntlet reviews.** Rebase only if GitHub flags the PR behind/conflicting:
    - Clean rebase (no conflicts) → verify the PR's own diff/content is unchanged → keep `reviews_ok`,
-     update `head_sha` to the new tip, but set `ci = pending`; CI must return green before merging.
-   - Rebase requiring conflict resolution → PR content changed → **reset `reviews_ok` to 0**, re-enter
-     Stage 2.
+     update `head_sha` to the new tip, set `ci = pending`, **and relaunch its CI watch in the same
+     wake** — the rebased PR must not sit unwatched until the heartbeat; CI must return green before
+     merging.
+   - Rebase requiring conflict resolution → PR content changed → **reset `reviews_ok` to 0**, relaunch
+     the CI watch, re-enter Stage 2.
    - Still open, mergeable, not behind/dirty/conflicting, same live `head_sha`, `reviews_ok == 2`,
      and `ci == green` → still immediately mergeable; return to step 1 in the same wake.
 

@@ -29,6 +29,21 @@
 - Work-conserving dispatch is mandatory: every wake scans all findings/PRs and launches every due
   action that fits a free slot before returning. Waiting is allowed only when no useful action is
   launchable anywhere in the run.
+- Stage 0 is **pipelined, never a blocking phase**: sweep shards and verification chunks run as
+  background tasks; each verification chunk's confirmed findings are deduped incrementally against
+  the run-wide survivor set and fanned out immediately. NEVER barrier on the full sweep or full
+  verification before starting fixes, and NEVER run a sweep as a blocking foreground call.
+- A pending-CI PR must ALWAYS have a live watch: if the CI snapshot reads pending and the watch task
+  has exited (including after any rebase/push), relaunch the watch in the same wake — never wait for
+  the heartbeat.
+- Stop a PR's in-flight review before dispatching content-changing work on it (review fix, CI fix,
+  copilot-address, conflict-resolving rebase): a verdict on a doomed SHA wastes tokens and a review
+  slot. Refill the slot with the next due review.
+- Reconcile from ONE batched `gh pr list --label gauntlet-run-<run-id> --json …` snapshot per wake
+  (`<rundir>/prs.json`); per-PR `gh` calls only where the snapshot falls short. Merge-gate CI truth
+  stays the re-polled `gh pr checks` snapshot.
+- Carryover pruning NEVER blocks a fresh-run start: keep uncertain entries, launch Stage 0
+  immediately, ask the user asynchronously, and fold the answer in as its own wake.
 - Public API surface/behavior changes need user confirmation by default (see Constraints). The
   `api_changes` flag lives in the ledger header and is re-read every wake — never trust memory, never
   auto-merge an unapproved API break.

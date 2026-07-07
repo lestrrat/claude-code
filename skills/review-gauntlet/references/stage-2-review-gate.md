@@ -37,6 +37,13 @@ back SATISFIED — so a still-broken commit never burns the second review before
 reviews for the same PR that serialize.) Each pass is a separate process, so the two verdicts stay
 independent regardless.
 
+**Kill doomed passes — don't let them finish.** If a precondition goes dirty while a review is in
+flight on a PR — CI turns red, Copilot items land, a conflict appears — or any content-changing fix
+is about to be dispatched for it, **stop the in-flight review task before dispatching the fix**: its
+verdict can only describe a SHA that is about to be replaced, so letting it run wastes both the
+tokens and the review slot. The freed slot immediately refills with the next due review (Loop
+control step 3).
+
 If a pass's `codex exec` can't return a verdict (quota/rate-limit, auth, timeout, or other system
 error — see "Codex fallback"), retry it once, then run that pass as a **fresh subagent** reviewing the
 whole `<base>...HEAD` diff and ending in the same `VERDICT:` line. A subagent fallback pass counts
@@ -64,6 +71,9 @@ Plan JSONL schema:
 Rules:
 
 - Keep units auditable and finite. Prefer 5–15 units; split huge units, merge tiny mechanical ones.
+- The plan describes PR content, so **reuse it across passes on unchanged content**: for pass 2 on
+  the same SHA (or clean base-only rebase, diff unchanged), copy pass 1's plan to
+  `review-<pr>-2.plan.jsonl` instead of re-deriving. Re-derive only when PR content changed.
 - Each unit MUST name concrete `target` + concrete `checks`.
 - For code, include at least one cross-cutting unit when behavior spans files or packages.
 - For non-code, include at least one cross-artifact/whole-piece unit when multiple artifacts/sections

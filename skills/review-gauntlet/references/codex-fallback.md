@@ -11,8 +11,8 @@ report that the pass ran on the Claude-subagent fallback.
 
 - **Stage 0 (adversarial review)** → run the adversarial sweep with your own subagents: follow the
   `adversarial-review` skill over the same scope (tier/shard it for a large surface, as Stage 0
-  already describes), writing findings to `findings-raw.md` in the same shape codex would have. The
-  neutral verification pass (Stage 0 step 2) is unchanged.
+  already describes), writing findings to that shard's `findings-raw-<shard>.md` in the same shape
+  codex would have. The streamed verification (Stage 0 step 2) is unchanged.
 - **Stage 2a (per-PR review)** → spawn a **fresh** subagent to review the whole `<base>...HEAD` diff
   with an equally adversarial pass, using the same `review-<pr>-<n>.plan.jsonl` /
   `review-<pr>-<n>.progress.jsonl` protocol and ending in exactly one `VERDICT: SATISFIED` /

@@ -75,11 +75,11 @@ Each run has `<rundir>/lease.json`:
   adopt can't both win because only one `mkdir` succeeds. (A crashed claim leaves a stale
   `claim.lock`; treat one whose mtime is older than a few minutes as abandoned and clear it.)
 - **Heartbeat.** Rewrite the lease with `updated = $(date +%s)` every wake once you're the confirmed
-  owner, **and** immediately before and after any long *foreground* step (a Stage 0 sweep, a
-  verification pass) so a busy turn still looks alive. Long *review/CI* work is already backgrounded,
-  so between those the turn is short. A lease is **stale** only once `now - updated` exceeds **~30
-  min** — comfortably longer than any single foreground operation, so liveness flags a *dead* driver,
-  not a busy one.
+  owner, **and** immediately before and after any long *foreground* step, should one be unavoidable,
+  so a busy turn still looks alive. All long work — sweep shards, verification chunks, reviews, CI —
+  is backgrounded, so turns stay short and the per-wake refresh normally suffices. A lease is
+  **stale** only once `now - updated` exceeds **~30 min** — comfortably longer than any single
+  foreground operation, so liveness flags a *dead* driver, not a busy one.
 - **Never hold the run hostage on a user prompt.** Do NOT block the loop waiting on a user answer —
   that freezes the heartbeat and could let the run be declared stale mid-drive. Park the finding
   `awaiting-api`, surface the question, keep driving the other findings, reschedule, and fold the

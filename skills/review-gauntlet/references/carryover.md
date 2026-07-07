@@ -52,6 +52,12 @@ List those candidates with why each looks stale and ask the user** which to remo
 drop an entry you're uncertain about; a wrongly-pruned `refuted` re-opens a settled non-issue, and a
 wrongly-pruned `aborted` loses a real unfinished thread.
 
+**The question must not stall the run.** Keep every uncertain entry in place, feed carryover as-is,
+and launch Stage 0 immediately — surface the candidate list to the user in the same message and fold
+the answer in when it lands as its own wake (prune then; kept-by-default entries are only advisory
+verifier context, so starting without the answer costs nothing). Same principle as "never hold the
+run hostage on a user prompt" (Run lease).
+
 Note what was pruned (and what the user kept) so the decision is auditable on the next run.
 
 A run is distilled into the ledger **exactly once**, on its **normal exit** (all its PRs terminal) —
@@ -69,9 +75,10 @@ mid-flight snapshot path.)
    finishes). Any already-live run keeps its own dir, lease, and heartbeat; a fresh run never closes,
    merges, or stops driving another run's PRs (abandoning a specific run is a separate explicit ask).
 2. **Read every file in `.review-gauntlet/history/`, then prune** (drop entries no longer applicable
-   to current `<base>`; confirm any uncertain deletions with the user — see "Pruning the ledger").
-   Pruning only ever edits **finished** runs' own files (no live writer), so there's nothing to race.
-   Feed the pruned carryover into Stage 0 (below).
+   to current `<base>`; uncertain deletions are asked about **without blocking** — keep the entries
+   and launch Stage 0 while the question is pending, see "Pruning the ledger"). Pruning only ever
+   edits **finished** runs' own files (no live writer), so there's nothing to race. Feed the pruned
+   carryover into Stage 0 (below).
 3. Proceed through Stage 0 → Stage 1 → the loop as normal, on the clean `<rundir>`.
 
 ### How carryover shapes Stage 0

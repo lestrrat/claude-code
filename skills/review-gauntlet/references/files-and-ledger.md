@@ -6,9 +6,10 @@ files from colliding — see "Run identity and concurrency".
 
 | File (under `<rundir>`) | Contents |
 |------|----------|
-| `findings-raw.md` | Codex's raw adversarial findings |
-| `verdicts.md` | Neutral verification verdicts (which findings survive) |
+| `findings-raw-<shard>.md` | Codex's raw adversarial findings, one file per sweep shard (single-shard runs have one) |
+| `verdicts-<chunk>.md` | Neutral verification verdicts per chunk (which findings survive) |
 | `state.md` | Live per-finding ledger — a **cache/hint**, not the source of truth (see below) |
+| `prs.json` | Batched `gh pr list` snapshot of this run's PRs — the per-wake reconcile input (Loop control) |
 | `lease.json` | This run's active-driver lease (`{agent, updated}`; see "Run lease") |
 | `review-<pr>-<n>.txt` | Codex's PR review output, round `n` |
 | `review-<pr>-<n>.plan.jsonl` | Orchestrator-authored review work units for round `n` |
