@@ -12,12 +12,10 @@ Read linked doc BEFORE any work in that area. No exceptions.
 
 | Area | Trigger | Doc |
 |------|---------|-----|
-| Shell | Using Bash tool | `~/.claude/docs/shell.md` |
-| Git | commit, push, add, branch, merge, rebase, worktree, etc. | `~/.claude/docs/git-operations.md` |
+| Shell | Using Bash tool, or processing output from gh, curl, kubectl, cloud CLIs | `~/.claude/docs/shell.md` |
+| Git | commit, push, add, branch, merge, rebase, worktree, commit/PR messages, etc. | `~/.claude/docs/git-operations.md` |
 | Go | Writing Go code | `~/.claude/docs/go.md` |
 | Go servers | Writing Go server, daemon, worker, listener, or other long-lived-goroutine code | `~/.claude/docs/go-server-lifecycle.md` |
-| Cmd output | Processing Bash output, gh, curl, wget, kubectl, cloud CLIs | `~/.claude/docs/remote-data.md` |
-| Git msgs | Formatting commits & PRs | `~/.claude/docs/git-messages.md` |
 | Debugging | Fixing complex/multi-component bugs | `~/.claude/docs/debugging.md` |
 | Agent docs | Writing/editing CLAUDE.md, docs/, skills/ | `~/.claude/docs/agent-instructions.md` |
 | Claude Code | Claude Code ONLY: task delegation, `/codex-exec`, slash-command workflows | `~/.claude/docs/claude-code.md` |
@@ -25,7 +23,7 @@ Read linked doc BEFORE any work in that area. No exceptions.
 # GitHub
 
 - ALWAYS use `gh` CLI for GitHub interactions. NEVER scrape pages or construct API URLs manually.
-- All `gh` output → store to `.tmp/` first (see remote-data rules above).
+- Large/multi-record `gh` output → store to `.tmp/` first (see shell.md Output Storage). Single-value `--jq` queries OK direct.
 
 # Execution
 

@@ -40,7 +40,7 @@ If either is missing, ask the user.
 ## Commit
 
 1. Stage only files relevant to the instructions. Do NOT stage `.tmp/` content.
-2. Write a commit message per `~/.claude/docs/git-messages.md` rules.
+2. Write a commit message per `~/.claude/docs/git-operations.md` rules.
 3. Commit.
 
 ## Merge
