@@ -3,7 +3,7 @@
 1. Run the codex adversarial review. Scope = the arg if given, else the whole repo.
 
    ```
-   codex exec --sandbox workspace-write -o <rundir>/findings-raw.md \
+   codex exec --sandbox workspace-write -c "sandbox_workspace_write.network_access=true" -o <rundir>/findings-raw.md \
      "Perform an adversarial code review of <SCOPE>. For each finding give: a stable ID, \
       severity, file:line, the defect, a concrete reproduction trigger, the impact, and a \
       concrete fix. Be hostile — surface everything that could be wrong. Do not edit code."

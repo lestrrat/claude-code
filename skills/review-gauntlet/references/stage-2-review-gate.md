@@ -89,7 +89,7 @@ retry once, then use the fresh-subagent fallback. Ignore any late verdict from a
 attempt unless its attempt id still matches the active review pass.
 
 ```
-codex exec --sandbox workspace-write -C $PROJECT/.worktrees/<branch> \
+codex exec --sandbox workspace-write -c "sandbox_workspace_write.network_access=true" -C $PROJECT/.worktrees/<branch> \
   -o <rundir>/review-<pr>-<n>.txt \
   "Review the changes on this branch vs <base> (the whole git diff <base>...HEAD). \
    First read $PROJECT/<rundir>/review-<pr>-<n>.plan.jsonl. Append progress JSONL to \
