@@ -58,8 +58,9 @@
   `done` or accepted plan amendment, not vague "still working" output. Stale meaningful progress →
   suspicious review → retry/fallback per Stage 2a.
 - Reviewers do not own the plan but must not treat it as presumptively complete: critically evaluate
-  its coverage first, and raise any omitted dimension via a `plan_amendment_request` event rather than
-  silently reviewing only the listed units. Never rewrite the plan or self-grant units (Stage 2a).
+  its coverage first, and raise any omitted dimension or materially wrong unit via a
+  `plan_amendment_request` event rather than silently reviewing only the listed units. Never rewrite
+  the plan or self-grant units (Stage 2a).
 - One decision at N sites is the most common root cause. Trigger the §2a-deep root-cause pass on the
   **first** "missing/wrong at site X" finding (its shape, not a round count), map the whole space with
   a dedicated **read-only mapper** subagent — never one that also fixes, which under-maps toward what
