@@ -52,8 +52,10 @@ its own context.
 
 **Review work-plan ledger — orchestrator-owned, target-generic.** Before launching each review pass,
 write `<rundir>/review-<pr>-<n>.plan.jsonl`. The orchestrator owns the plan; the reviewer reports
-progress against it but does NOT redefine it. Derive units from the review target, not from fixed
-global stages:
+progress against it but does NOT redefine it. The reviewer is nonetheless expected to critically
+evaluate the plan for completeness before executing it, and to flag any omitted dimension via the
+amendment mechanism below rather than silently accepting the supplied decomposition as exhaustive.
+Derive units from the review target, not from fixed global stages:
 
 - **Code PR default** → changed files/modules, public API/behavior boundaries, cross-file invariants,
   tests/coverage relevant to changed behavior, migration/docs/golden updates when touched.
@@ -78,9 +80,15 @@ Rules:
 - For code, include at least one cross-cutting unit when behavior spans files or packages.
 - For non-code, include at least one cross-artifact/whole-piece unit when multiple artifacts/sections
   exist.
-- The reviewer may append a `plan_amendment_request` event when the plan is materially wrong or
-  incomplete, but unapproved amendments do NOT count as plan units. The orchestrator folds that request
-  on the next wake and either updates the plan + restarts the review pass, or ignores it with a note.
+- **The reviewer must not treat the plan as presumptively complete.** Before working the units, judge
+  whether they cover the dimensions this target actually needs; deterministic coverage is a design
+  goal, but the orchestrator's decomposition can still miss something. When a materially important
+  review dimension is omitted (or a unit is wrong), the reviewer MUST append a `plan_amendment_request`
+  event naming the gap rather than silently reviewing only the listed units — an unraised omission is a
+  reviewer failure. Requesting an amendment is the *only* sanctioned response: the reviewer never
+  rewrites the plan or self-grants units, and unapproved amendments do NOT count as plan units. The
+  orchestrator folds that request on the next wake and either updates the plan + restarts the review
+  pass, or ignores it with a note; the reviewer completes the existing units meanwhile.
 
 Progress JSONL schema:
 
@@ -102,10 +110,13 @@ attempt unless its attempt id still matches the active review pass.
 codex exec --sandbox workspace-write -c "sandbox_workspace_write.network_access=true" -C $PROJECT/.worktrees/<branch> \
   -o <rundir>/review-<pr>-<n>.txt \
   "Review the changes on this branch vs <base> (the whole git diff <base>...HEAD). \
-   First read $PROJECT/<rundir>/review-<pr>-<n>.plan.jsonl. Append progress JSONL to \
-   $PROJECT/<rundir>/review-<pr>-<n>.progress.jsonl as each planned unit starts and finishes; \
+   First read $PROJECT/<rundir>/review-<pr>-<n>.plan.jsonl, then critically assess whether its units \
+   cover the review dimensions this change actually needs — the plan is the orchestrator's starting \
+   point, not a guarantee of complete coverage. If an important dimension is missing or a unit is \
+   wrong, append a plan_amendment_request event to the progress JSONL naming the gap; do NOT silently \
+   limit your review to the listed units, and do NOT rewrite the plan yourself. Then append progress \
+   JSONL to $PROJECT/<rundir>/review-<pr>-<n>.progress.jsonl as each planned unit starts and finishes; \
    progress counts only when it references a planned unit and includes concrete evidence. \
-   Do not rewrite the plan; request an amendment in progress JSONL if needed. \
    List any issues with file:line and a concrete fix. End with exactly one line: \
    'VERDICT: SATISFIED' or 'VERDICT: NOT SATISFIED'."   # run in background
 ```
