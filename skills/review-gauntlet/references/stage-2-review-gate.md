@@ -95,8 +95,10 @@ Rules:
   a request pending indefinitely) — by appending an `amendment_resolution` event to the same progress
   JSONL:
   - `decision:"accepted"` → update the plan (this yields a new `plan_id`), and the pass that raised it
-    is **non-countable**: the review **restarts on the same SHA** under the new plan. Bound this to
-    defeat a reviewer that vetoes-by-amendment or a livelock where every pass "finds" a new gap: allow
+    is **non-countable**: the review **restarts on the same SHA** under the new plan **as a new
+    dispatch** — `<n>` increments, so it writes a fresh `review-<pr>-<n>.{plan,progress}.jsonl` pair and
+    NEVER appends to the raising pass's progress file (which still carries the unresolved amendment).
+    Bound this to defeat a reviewer that vetoes-by-amendment or a livelock where every pass "finds" a new gap: allow
     at most **2 accepted amendments per `(head_sha, plan-lineage)`** — an accepted amendment changes the
     plan, not the PR content, so keying on `head_sha` alone would never reset the budget. On exhaustion,
     do NOT auto-reject the gap into a merge — **escalate to the user** (park the row, Bailout); a
@@ -158,11 +160,17 @@ codex exec --sandbox workspace-write -c "sandbox_workspace_write.network_access=
 
 **`verdict_admissible(pr, n)` — the countability chokepoint.** A SATISFIED verdict is only *countable*
 toward `reviews_ok` (versus merely *present* in a file) when this predicate holds. Every
-SATISFIED-consuming decision — the tally below and the accept-label — routes through it. It is a
-**cheap, deterministic, LOCAL parse** the orchestrator runs at the fold over files that already exist:
-grep/jq-level work, **never** an LLM or subagent/codex call (delegating it would cost a full review on
-the hot path at every fold without adding safety). A SATISFIED that fails any input is **recorded and
-reported, but NOT counted**. Evaluate all seven inputs:
+SATISFIED-consuming decision — the tally below and the accept-label — routes through it. **Inputs 1–5
+and 7 are its per-tally core: a cheap, deterministic, LOCAL parse** the orchestrator runs at the fold
+over files that already exist — grep/jq over `review-<pr>-<n>.{txt,plan.jsonl,progress.jsonl}` plus
+local git (`git rev-parse HEAD`, `git diff --name-only`), **never** an LLM or subagent/codex call and
+**never a `gh`/network round-trip** (delegating it would cost a full review on the hot path at every
+fold, and a `gh` fetch on every tally is that same hot-path cost without adding safety). Those six run
+at **every** tally. **Input 6 (Copilot clear) is the one input that needs a `gh` call**, so it is NOT
+part of the per-tally local parse: it is evaluated **only at the accept-label decision** (the tally
+below), where a `gh` round-trip already happens — never on the ordinary count. A SATISFIED that fails
+any core input is **recorded and reported, but NOT counted**. Evaluate the inputs — 1–5 and 7 are
+local-only; 6 requires a `gh` call and runs at accept-label only:
 
 1. **Per-pass identity** — the pass's `pass_identity.head_sha` equals the SHA the pass targeted **and**
    the live tip (`git rev-parse HEAD`) at count time, **and** `pass_identity.plan_id == hash(current
@@ -181,9 +189,10 @@ reported, but NOT counted**. Evaluate all seven inputs:
    pass's `pass_identity.head_sha` == this SHA with a NOT-SATISFIED verdict) and no intervening content
    change. This input is also consulted at **dispatch** (Loop control step 3) to refuse a review on a
    known-bad SHA. [I11]
-6. **Copilot clear at count time** — re-fetch unresolved Copilot items **scoped to THIS PR** (verify the
-   JSON is for this PR per the 2a precondition; do not trust the shared `.tmp/copilot-review-items.json`
-   blindly) and require none. [I7]
+6. **Copilot clear** — **accept-label only; requires a `gh` call, so it is NOT part of the per-tally
+   local parse.** At the accept-label decision, re-fetch unresolved Copilot items **scoped to THIS PR**
+   (verify the JSON is for this PR per the 2a precondition; do not trust the shared
+   `.tmp/copilot-review-items.json` blindly) and require none. [I7]
 7. **Plan-coverage proxy** — every changed file in `<base>...HEAD` is named by some unit `target` (or
    falls under a cross-cutting unit); `>= 1` cross-cutting unit when the diff spans multiple files; unit
    count in the 5–15 band (or an explicit override note in the plan). [I9, structural half]
@@ -197,16 +206,18 @@ As each verdict lands, tally it for the SHA it ran on:
 - **NOT SATISFIED** → dispatch a scoped fix subagent into that worktree with the issue list; it
   commits + pushes → HEAD advances → the SHA's tally is void. A later wake starts a fresh review on
   the new tip. (Because reviews are sequential, no second review was spent on this broken commit.)
-- **SATISFIED** → run `verdict_admissible(pr, n)` (above). If it fails, record the verdict as
-  non-countable with the failing input as the reason, report it, and do **not** touch `reviews_ok` (an
-  `accepted`-amendment failure restarts the pass on the same SHA). If it passes, increment `reviews_ok`.
-  If it's the **first** admissible SATISFIED for this SHA, the next wake launches the second
-  (corroborating) review on the same SHA. On the **second** admissible SATISFIED on the same SHA — **and
-  only with `ci == green|none` and input 6 (Copilot) clear** — the review gate is met for this HEAD;
-  swap the PR's label:
+- **SATISFIED** → run `verdict_admissible(pr, n)`'s **local core (inputs 1–5 and 7)** — no `gh` call at
+  the ordinary tally. If it fails, record the verdict as non-countable with the failing input as the
+  reason, report it, and do **not** touch `reviews_ok` (an `accepted`-amendment failure restarts the
+  pass on the same SHA). If it passes, increment `reviews_ok`. If it's the **first** admissible
+  SATISFIED for this SHA, the next wake launches the second (corroborating) review on the same SHA. On
+  the **second** admissible SATISFIED on the same SHA, evaluate the accept predicate — **the two
+  admissible SATISFIED verdicts AND `ci == green|none` AND input 6 (Copilot clear, evaluated now via the
+  scoped `gh` re-fetch)**. Only when all three hold is the review gate met for this HEAD; swap the PR's
+  label:
   `gh pr edit <pr> --remove-label gauntlet-reviewing --add-label gauntlet-accepted`. (Folding CI +
   Copilot into the accept predicate is what stops the label claiming "accepted" while CI is still
-  pending.)
+  pending. Input 6's `gh` fetch is spent here, once at the accept decision, not on every tally.)
 
 Every pass reviews the whole `<base>...HEAD` diff (not just the last fix-delta), so accumulated fixes
 are always judged as one piece.
