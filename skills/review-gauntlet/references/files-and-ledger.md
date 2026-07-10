@@ -48,7 +48,7 @@ base_branch: main       # the branch PRs target & diffs measure against (set onc
 api_changes: ask        # ask | allowed (run-wide; set once from the invocation)
 phase: fanout           # reviewing (Stage 0) → fanout (Stage 1+); written at run start before Stage 0
 
-id | slug | branch | worktree | pr | head_sha | reviews_ok | ci | attempts | started | status
+id | slug | branch | worktree | pr | head_sha | reviews_ok | ci | attempts | started | api_approval | status
 ```
 
 - `head_sha` — the branch tip (`git rev-parse HEAD`) that `reviews_ok` and `ci` describe. `ci` is
@@ -60,7 +60,15 @@ id | slug | branch | worktree | pr | head_sha | reviews_ok | ci | attempts | sta
 - `ci` — `green` / `red` / `pending` / `none` for `head_sha`.
 - `attempts` — task attempts so far (for the retry-once bailout).
 - `started` — wall-clock start of the current attempt (for the 1-hour cap).
+- `api_approval` — durable record of the user's decision on this finding's API-changing fix: `-`
+  (not an API change, or not yet decided) | `approved@<iso>` | `declined@<iso>`. Written the moment
+  the user answers, so a later wake — or a fresh agent that adopted the run — reads it and never
+  re-asks about a finding already decided. It records the decision (an input); `status` stays the
+  live position, so the two never contradict: `approved` pairs with the finding back in normal
+  fanout, `declined` with a terminal `aborted`. A one-off approval lands here only; it never flips
+  the run-wide `api_changes` header.
 - `status` — `pending` → `in_review` → `mergeable` → `merged`, or `aborted`; plus `awaiting-api`
-  while parked for the user to approve an API-changing fix.
+  while parked for the user to approve an API-changing fix. That park resolves via `api_approval`:
+  `approved` returns the finding to the normal flow, `declined` makes it `aborted` (terminal).
 
 ---
