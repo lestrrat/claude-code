@@ -23,6 +23,10 @@ same unactionable verdict, or CI fails identically after a fix attempt.
 When the loop exits, summarize:
 
 - **Merged** — finding id, PR number, one-line fix.
+- **Residual risk** — for each merged PR, the `RESIDUAL-RISK` line its accepting SATISFIED reviews
+  recorded (the least-certain area), and a flag when both accepting passes named the same area. This is
+  non-actionable, non-gating calibration metadata — a place a human might look, never a reopened
+  finding (Stage 2a).
 - **Aborted** — finding id, why, pointer to `abort-<id>.md`.
 - **Skipped** — REFUTED findings, UNCERTAIN ones the user should triage, and any API-changing fix the
   user was asked about and declined (with the change each would have needed).
