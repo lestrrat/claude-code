@@ -52,7 +52,9 @@
   prefer a scoped subagent), and rebase away any conflict with `<base>`. PR-content changes reset
   verdicts. Clean base-only rebase with unchanged PR diff keeps `reviews_ok` and sets `ci = pending`.
   Never spend a review over open Copilot items, a red check, or a conflicting PR (Stage 2a).
-- Reviews are independent re-rolls: separate `codex exec` each pass, no shared context.
+- Reviews are fresh, context-isolated re-rolls: separate `codex exec` each pass, no shared context.
+  Two passes re-roll a stochastic reviewer to catch a missed defect — they are NOT statistically
+  independent (same model/prompt/diff), so the gate is a miss-catcher, not a proof of correctness.
 - Before each review, write an orchestrator-owned `review-<pr>-<n>.plan.jsonl`; reviewers append
   `review-<pr>-<n>.progress.jsonl` events against planned units. Meaningful progress = planned unit
   `done` or accepted plan amendment, not vague "still working" output. Stale meaningful progress →
@@ -87,7 +89,7 @@
   prune an entry you're unsure about.
 - If `codex exec` can't deliver a verdict (quota/rate-limit, auth, timeout, or other system error —
   *not* a real finding list / `VERDICT:` line), retry once, then do the equivalent work with your own
-  subagents: the Stage 0 adversarial sweep, or an independent fresh-subagent pass in Stage 2a. The
+  subagents: the Stage 0 adversarial sweep, or a fresh, context-isolated subagent pass in Stage 2a. The
   gate is unchanged — note any fallback pass in the report. See "Codex fallback".
 - CI status comes from a re-polled `gh pr checks` snapshot with **zero fail AND zero pending lines** —
   never from the `--watch` exit code (it can exit 0 on pending/unregistered checks). No green, no merge.

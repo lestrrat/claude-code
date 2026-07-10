@@ -36,7 +36,7 @@ escalation rung, which forces this pass no later than the 2nd `NOT SATISFIED` on
    Enumeration and fix are two subagents, in that order, always.
 3. **One batch-fix round** for all confirmed gaps. Route every site through **ONE shared
    chokepoint/helper** so the cells can't diverge again. Add a test per cell.
-4. **Resume the gauntlet** (two independent SATISFIED) on the batched result.
+4. **Resume the gauntlet** (two fresh, context-isolated SATISFIED) on the batched result.
 
 Caveats:
 
