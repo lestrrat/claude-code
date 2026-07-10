@@ -18,12 +18,14 @@ Default trio — include unless app has specific reason not to:
 | Method | Returns |
 |--------|---------|
 | `Done() <-chan struct{}` | Closed when work goroutine has fully exited |
-| `Err() error` | Terminal error; nil for ctx-driven clean exit |
+| `Err() error` | Terminal cause; `ErrServerClosed` for ctx-driven clean exit, non-nil for genuine failure, nil only before exit |
 | `Wait() error` | `<-Done(); return Err()` |
 
 Beyond those: per-app. Examples — bound `Addr()` (for port=0), drop counters, connection counts, queue depth, config-reload signal, app-specific introspection.
 
 `ErrServerClosed` sentinel recorded on controller for ctx-driven clean exit → distinguishes clean shutdown from genuine failure. Sub-package transports re-export it so `errors.Is` matches across layers.
+
+Callers MUST treat `ErrServerClosed` as success: `if err := ctrl.Wait(); err != nil && !errors.Is(err, ErrServerClosed) { ... }`. Bare `err != nil` fatals on every clean shutdown.
 
 Multiple variants sharing infra (e.g. UDP/TCP/TLS/QUIC) → extract `Done`/`Err`/`Wait` plumbing into tiny internal package (acidns uses `internal/serverctl`), each variant's controller embeds `Core` by value. Implemented once, promoted automatically.
 
