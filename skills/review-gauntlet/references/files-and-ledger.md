@@ -19,6 +19,10 @@ files from colliding — see "Run identity and concurrency".
 
 Store ALL codex and `gh` output to `.tmp/` first, then Read/Grep it. NEVER `/tmp/`.
 
+All of this is driver bookkeeping, **never repo content — do NOT commit it**: the whole `<rundir>`
+(`.tmp/review-gauntlet/**`) and the carryover tree (`.review-gauntlet/**`) stay git-ignored, and a fix
+commit stages only the specific source files it changes (explicit paths, never `git add -A`/`.`).
+
 **Durable cross-run knowledge lives outside `.tmp/`.** `.tmp/` may be wiped between runs, so the
 one thing a *new* run needs to remember from old ones — the carryover ledger — is kept at the repo
 root under `.review-gauntlet/history/` (git-ignored; add `.review-gauntlet/` to `.gitignore` if

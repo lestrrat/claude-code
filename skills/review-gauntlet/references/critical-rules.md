@@ -18,6 +18,10 @@
 - Run-owned git/GitHub operations are authorized by invocation: `add`, `commit`, `push`, PR
   create/update, labels/checks/comments, and merge. Ask only for public API changes, active-run
   takeover, uncertain carryover pruning, or out-of-scope/destructive work.
+- NEVER commit the run's own bookkeeping — the `<rundir>` under `.tmp/review-gauntlet/**` (ledger,
+  plans, progress, review/CI outputs, lease) and the carryover tree `.review-gauntlet/**`. A fix commit
+  stages ONLY the specific source files it changes, by explicit path — never `git add -A` / `git add .`,
+  which would sweep in run state. Both trees must be git-ignored; add them to `.gitignore` if missing.
 - NEVER pass destructive instructions (delete, force-push, reset) to `codex exec`.
 - NEVER use `--dangerously-bypass-approvals-and-sandbox`; always `--sandbox workspace-write`.
 - One finding = one tightly-scoped PR. Do not bundle unrelated fixes.
