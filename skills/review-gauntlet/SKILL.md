@@ -79,11 +79,10 @@ Read stage refs only when that stage/action is due:
 4. Launch all due work up to caps — sweep shards, verification chunks, fix fan-out, reviews, CI
    watches/fixes, base refresh; stop in-flight reviews doomed by a content change.
 5. Merge ready PRs one at a time until no candidate remains immediately ready after base refresh.
-6. **Slot audit before sleep** — audit the fix and review pools separately (each has its own cap). Every
-   free slot must trace to a named reason *for its own pool*: no matching work queued, unmet
-   precondition, or external wait. A free fix slot with a pending finding, or a free review slot with an
-   eligible PR, means step 4 isn't done: return to it, then re-audit. Never reschedule with launchable
-   work idle.
+6. **Slot audit before sleep** — re-run dispatch (step 4) across both pools (fix and review each have
+   their own cap) and sleep only when no free slot in either pool can still launch work. If dispatch
+   could still fill a slot, step 4 isn't done: return to it, then re-audit. Never reschedule with
+   launchable work idle.
 7. Update carryover/final state if terminal; otherwise refresh lease and schedule next wake.
 
 ## Critical Rules
