@@ -55,8 +55,8 @@ id | slug | branch | worktree | pr | head_sha | reviews_ok | ci | attempts | sta
   pinned to this exact SHA. `reviews_ok` is pinned to this SHA **unless** the only change is a clean
   base-only rebase/merge with the PR diff unchanged; then carry `reviews_ok` forward to the new
   `head_sha` and set `ci = pending`.
-- `reviews_ok` — number of independent SATISFIED verdicts recorded against this PR's current content
-  (need 2).
+- `reviews_ok` — number of fresh, context-isolated SATISFIED verdicts recorded against this PR's
+  current content (need 2).
 - `ci` — `green` / `red` / `pending` / `none` for `head_sha`.
 - `attempts` — task attempts so far (for the retry-once bailout).
 - `started` — wall-clock start of the current attempt (for the 1-hour cap).

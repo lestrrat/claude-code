@@ -122,8 +122,8 @@ so the driver never blocks; each completion is its own wake.
 **Idempotency is the load-bearing property.** Because every wake re-derives from git/gh and launches
 only work not already in flight, a relaunch after a killed session — or two completions landing close
 together — cannot corrupt state or act on a stale verdict (PR-content pinning rejects stale verdicts
-at the gate). The worst case is a wasted duplicate review, which is harmless: it's an independent
-re-roll anyway. The agent is also single-threaded per turn, so wake *decisions* never truly race — only
+at the gate). The worst case is a wasted duplicate review, which is harmless: it's just another fresh,
+context-isolated re-roll anyway. The agent is also single-threaded per turn, so wake *decisions* never truly race — only
 in-flight tasks do.
 
 **Resume after a killed session — including by a different agent instance:** in-flight background

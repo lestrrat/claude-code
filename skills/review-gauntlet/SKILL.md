@@ -1,7 +1,7 @@
 ---
 name: review-gauntlet
 description: >-
-  Self-looping adversarial-review-to-merge pipeline. Codex runs an adversarial review (a given area/topic, else the whole repo), findings are neutrally verified, each survivor becomes its own PR, and a per-PR review gauntlet (two independent SATISFIED verdicts on the same commit, reviewed one at a time over the whole diff) plus event-driven CI monitoring gate an auto-merge. Multiple isolated runs (each keyed by a run-id, with a lease so only one agent drives each) can run concurrently in one repo. Drives its own loop via ScheduleWakeup — invoke once, no /loop wrapper. Args: [--run id] [area or topic]
+  Self-looping adversarial-review-to-merge pipeline. Codex runs an adversarial review (a given area/topic, else the whole repo), findings are neutrally verified, each survivor becomes its own PR, and a per-PR review gauntlet (two fresh, context-isolated SATISFIED verdicts on the same PR content, reviewed one at a time over the whole diff) plus event-driven CI monitoring gate an auto-merge. Multiple isolated runs (each keyed by a run-id, with a lease so only one agent drives each) can run concurrently in one repo. Drives its own loop via ScheduleWakeup — invoke once, no /loop wrapper. Args: [--run id] [area or topic]
 ---
 
 # Review Gauntlet
@@ -62,7 +62,7 @@ Read stage refs only when that stage/action is due:
 - **Run isolation:** touch only this run's `<rundir>`, ledger, labels, branches, PRs, and worktrees.
 - **One active driver:** lease controls ownership; never double-drive one run.
 - **Base branch is data:** read `base_branch` from ledger every wake; never assume `main`.
-- **Two-review gate:** two independent `SATISFIED` verdicts on same live PR content + green CI.
+- **Two-review gate:** two fresh, context-isolated `SATISFIED` verdicts on same live PR content + green CI.
 - **Sequential same-PR reviews:** launch review 2 only after review 1 is `SATISFIED`.
 - **Progress ledger:** reviewer progress means planned unit `done` or accepted amendment, not vague
   output.

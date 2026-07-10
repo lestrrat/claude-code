@@ -34,8 +34,9 @@ diff, no shared context, run as a **background** task (its completion is a wake;
 verdict in at step 2). The second, corroborating review is launched only **after** the first comes
 back SATISFIED — so a still-broken commit never burns the second review before the first has said
 "fix it". (Reviews for *different* PRs still run concurrently, up to the ~8 cap; it's only the two
-reviews for the same PR that serialize.) Each pass is a separate process, so the two verdicts stay
-independent regardless.
+reviews for the same PR that serialize.) Each pass is a separate process with no shared context, so
+the second verdict is a fresh, context-isolated execution rather than a continuation influenced by the
+first.
 
 **Kill doomed passes — don't let them finish.** If a precondition goes dirty while a review is in
 flight on a PR — CI turns red, Copilot items land, a conflict appears — or any content-changing fix
@@ -47,8 +48,8 @@ control step 3).
 If a pass's `codex exec` can't return a verdict (quota/rate-limit, auth, timeout, or other system
 error — see "Codex fallback"), retry it once, then run that pass as a **fresh subagent** reviewing the
 whole `<base>...HEAD` diff and ending in the same `VERDICT:` line. A subagent fallback pass counts
-toward the two-independent-SATISFIED gate exactly like a codex pass — it's an independent re-roll in
-its own context.
+toward the two-SATISFIED-verdict gate exactly like a codex pass — it's another fresh, context-isolated
+re-roll in its own context.
 
 **Review work-plan ledger — orchestrator-owned, target-generic.** Before launching each review pass,
 write `<rundir>/review-<pr>-<n>.plan.jsonl`. The orchestrator owns the plan; the reviewer reports
@@ -134,7 +135,12 @@ As each verdict lands, tally it for the SHA it ran on:
 Every pass reviews the whole `<base>...HEAD` diff (not just the last fix-delta), so accumulated fixes
 are always judged as one piece.
 
-**Gate is two independent SATISFIED verdicts on the same PR content.** Record the reviewed SHA
+**Gate is two fresh, context-isolated SATISFIED verdicts on the same PR content.** The two passes are
+not statistically or epistemically independent observations — they judge the same diff under the same
+review task and protocol (and, on the normal both-codex path, the same model and prompt), so their
+verdicts are correlated and this is not a probabilistic proof of correctness. What the second pass
+buys is a re-roll of a stochastic reviewer: a fresh execution, with none of the first pass's context
+to anchor it, that can catch a defect the first pass happened to miss. Record the reviewed SHA
 (`git rev-parse HEAD`) with each pass. A verdict counts while its SHA equals the live tip. It also
 continues to count after `<base>` advances if the PR is still non-conflicting and the PR diff/content
 is unchanged (e.g. clean base-only rebase); carry `reviews_ok` forward to the new `head_sha` and set
