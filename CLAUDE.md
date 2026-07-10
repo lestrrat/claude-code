@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Claude Code configuration dotfiles. No application code — nothing to build, test, or lint.
 
-`setup.sh` symlinks repo contents into `~/.claude/`. Edits here take effect immediately.
+`setup.sh [dir]` symlinks repo contents into `dir` (default `~/.claude/`). Edits here take effect immediately.
 
 ## Structure
 
@@ -17,7 +17,7 @@ Claude Code configuration dotfiles. No application code — nothing to build, te
 | `scripts/` | Reusable shell scripts → symlinked as `~/.claude/scripts/` |
 | `skills/` | User-invocable skills with YAML front matter (`name`, `description`) + steps |
 | `settings.json` | Permission config: `bypassPermissions` default |
-| `setup.sh` | Symlink installer. All items keep original name except `CLAUDE.md.global` → `CLAUDE.md` |
+| `setup.sh` | Symlink installer, target dir as optional first arg. All items keep original name except `CLAUDE.md.global` → `CLAUDE.md` |
 
 ## Editing Rules
 

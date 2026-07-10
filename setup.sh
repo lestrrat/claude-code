@@ -2,10 +2,11 @@
 set -eu
 
 this_dir="$(cd "$(dirname "$0")"; pwd)"
+claude_dir="${1:-$HOME/.claude}"
 
-echo "Setting up Claude Code symlinks..."
+echo "Setting up Claude Code symlinks in $claude_dir..."
 
-mkdir -p ~/.claude
+mkdir -p "$claude_dir"
 
 for item in CLAUDE.md.global docs scripts skills settings.json; do
   target="$this_dir/$item"
@@ -13,7 +14,7 @@ for item in CLAUDE.md.global docs scripts skills settings.json; do
   if [ "$item" = "CLAUDE.md.global" ]; then
     link_name="CLAUDE.md"
   fi
-  link="$HOME/.claude/$link_name"
+  link="$claude_dir/$link_name"
 
   if [ -L "$link" ]; then
     rm "$link"
