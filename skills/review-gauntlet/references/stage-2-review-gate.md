@@ -82,6 +82,16 @@ Rules:
 - For code, include at least one cross-cutting unit when behavior spans files or packages.
 - For non-code, include at least one cross-artifact/whole-piece unit when multiple artifacts/sections
   exist.
+- **Plan wellformedness — the orchestrator RUNS this before dispatch, not merely prefers it.** The plan
+  is the orchestrator's own guidance, so make the rules above a check it executes rather than prose it
+  hopes for. Before writing `pass_identity` and launching the pass, verify LOCALLY (jq over the
+  `plan.jsonl` plus `git diff --name-only <base>...HEAD`, no `gh`/LLM/subagent call): (i) every `unit`
+  has a non-empty `target` AND a non-empty `checks` array with ≥1 concrete check; (ii) all unit `id`s are
+  unique; (iii) the unit count is in the 5–15 band, or the plan carries an explicit override note;
+  (iv) ≥1 `cross-cutting` unit exists when the diff spans more than one file. A plan that fails any of
+  these is **not dispatched** — fix the plan first, then launch. (This gates the orchestrator's own plan;
+  it is distinct from the reviewer's coverage critique below and from `verdict_admissible` input 7, which
+  re-checks structural coverage at the fold.)
 - **The reviewer must not treat the plan as presumptively complete.** Before working the units, judge
   whether they cover the dimensions this target actually needs; deterministic coverage is a design
   goal, but the orchestrator's decomposition can still miss something. When a materially important
@@ -188,8 +198,38 @@ local-only; 6 requires a `gh` call and runs at accept-label only:
 2. **Output wellformedness** — `review-<pr>-<n>.txt` has exactly one final `VERDICT:` line
    (`grep -c '^VERDICT:'` == 1); a SATISFIED carries exactly one `RESIDUAL-RISK:` line immediately
    above it (`grep -c '^RESIDUAL-RISK:'` == 1). [I6]
-3. **Unit completion** — every `unit` id in `review-<pr>-<n>.plan.jsonl` has a matching `done` progress
-   event in `review-<pr>-<n>.progress.jsonl`. [I5]
+3. **Unit completion, with non-hollow evidence** — every `unit` id in `review-<pr>-<n>.plan.jsonl` has a
+   matching `done` progress event in `review-<pr>-<n>.progress.jsonl`, **and** that event's `evidence` is
+   non-empty AND matches ≥1 concrete-citation form. **Scope:** this input grades ONLY `done` events whose
+   `unit` id appears in that pass's `plan.jsonl`; sweep/summary pseudo-events (e.g. `unit:"sweep"` or
+   `unit:"verdict"`, which are never planned ids) are NOT planned units and are NOT graded here. Test the
+   citation LOCALLY — one `grep -E` over the `evidence` string, no LLM/subagent/`gh`/network — against this
+   EXACT alternation, so two agents running it independently agree on every string:
+
+   ```
+   [A-Za-z][A-Za-z0-9._/-]*:[0-9]|[A-Za-z0-9._/-]+\.(go|py|sh|md|json|jsonl|txt|ya?ml)|`[^`]+`|--[A-Za-z]|->|==|!=|<=|>=|[Ee]xit[ =]*[0-9]|[A-Za-z_][A-Za-z0-9_]+\(\)|[A-Za-z0-9]+[_-][A-Za-z0-9]
+   ```
+
+   Each branch is a self-contained form:
+   - **file:line** — `[A-Za-z][A-Za-z0-9._/-]*:[0-9]` — a named ref carrying a line/column number
+     (`stage-2:161`, `loop-control:87`, `SKILL.md:65`).
+   - **code-extension file** — `[A-Za-z0-9._/-]+\.(go|py|sh|md|json|jsonl|txt|ya?ml)` — a filename ending
+     in a recognized code extension.
+   - **backticked span** — `` `[^`]+` `` — a backtick pair with ≥1 inner char.
+   - **long-form CLI flag** — `--[A-Za-z]` — a `--flag`; a single-dash `-x` does NOT qualify.
+   - **arrow/comparison operator** — one of `->` `==` `!=` `<=` `>=`.
+   - **exit code** — `[Ee]xit[ =]*[0-9]` — matches `exit 1`, `exit1`, and `exit=1` alike (space optional).
+   - **empty-paren call** — `[A-Za-z_][A-Za-z0-9_]+\(\)` — an identifier immediately followed by `()`.
+   - **compound identifier** — `[A-Za-z0-9]+[_-][A-Za-z0-9]` — a token with an INTERNAL `_` or `-`
+     (`snake_case` OR `kebab-case`: `patch_id_of`, `fail-closed`, `multi-commit`). The internal separator
+     is what discriminates it from prose; a bare word with no `_`/`-` does NOT qualify.
+
+   There is deliberately NO open "quoted/parenthetical span" form: no length floor both admits genuine
+   evidence and rejects `"checked (x)"`/`(K)`, so it is removed rather than left vague. Empty evidence, or
+   a restatement carrying none of the forms above (`""`, `"checked the unit"`, `"verified"`,
+   `"looks good, done"`, `"reviewed the unit as planned"`, `"checked (x)"`), fails this input. This is a
+   **floor** that rejects vacuous evidence — it does NOT certify the check was *substantive* (see the
+   residue note below). [I5]
 4. **Amendment resolution** — every `plan_amendment_request` in the progress JSONL has a recorded
    `amendment_resolution`. Any unresolved request → inadmissible. Any `accepted` one → this pass ran
    under the superseded plan → non-countable, restart on the same SHA (see the amendment rules above). [I4]
@@ -205,9 +245,14 @@ local-only; 6 requires a `gh` call and runs at accept-label only:
    falls under a cross-cutting unit); `>= 1` cross-cutting unit when the diff spans multiple files; unit
    count in the 5–15 band (or an explicit override note in the plan). [I9, structural half]
 
-Inputs 2/3/7 are a plain parse of the JSONL/txt — keep them that way. This mechanizes only the
-*structural* half of coverage: whether a unit's `checks` are **substantive** vs. hollow stays reviewer
-judgement (an independent, still-prose residue), as does the two passes' epistemic non-independence.
+Inputs 2/3/7 are a plain parse of the JSONL/txt — keep them that way. **What is deliberately NOT
+mechanized, and stays prose residue:** (a) input 3's evidence floor rejects empty/boilerplate evidence
+but cannot judge whether a check was *substantive* rather than hollow-but-concrete — that is an
+irreducible judgement call, unenforced; (b) input 7's coverage proxy is still gameable by one trivial
+unit per changed file (the 5–15 band and per-file naming can be satisfied while covering nothing); and
+(c) the two passes stay epistemically correlated — same diff, same protocol, same model — which no
+countability predicate addresses. These are acknowledged residue, not closed gates; do not read the
+mechanization above as more than the floor it is.
 
 As each verdict lands, tally it for the SHA it ran on:
 
