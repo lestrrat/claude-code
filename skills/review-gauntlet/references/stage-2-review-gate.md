@@ -48,8 +48,8 @@ control step 3).
 If a pass's `codex exec` can't return a verdict (quota/rate-limit, auth, timeout, or other system
 error — see "Codex fallback"), retry it once, then run that pass as a **fresh subagent** reviewing the
 whole `<base>...HEAD` diff and ending in the same `VERDICT:` line. A subagent fallback pass counts
-toward the two-verdict gate exactly like a codex pass — it's another fresh, context-isolated re-roll in
-its own context.
+toward the two-SATISFIED-verdict gate exactly like a codex pass — it's another fresh, context-isolated
+re-roll in its own context.
 
 **Review work-plan ledger — orchestrator-owned, target-generic.** Before launching each review pass,
 write `<rundir>/review-<pr>-<n>.plan.jsonl`. The orchestrator owns the plan; the reviewer reports

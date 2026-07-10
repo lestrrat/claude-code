@@ -17,6 +17,6 @@ report that the pass ran on the Claude-subagent fallback.
   with an equally adversarial pass, using the same `review-<pr>-<n>.plan.jsonl` /
   `review-<pr>-<n>.progress.jsonl` protocol and ending in exactly one `VERDICT: SATISFIED` /
   `VERDICT: NOT SATISFIED` line. Each fallback pass is still a fresh, context-isolated re-roll in its
-  own subagent/context, so the two-verdict gate holds exactly as it does with codex.
+  own subagent/context, so the two-SATISFIED-verdict gate holds exactly as it does with codex.
 
 This is a fallback for *system* failure, not a preference — use codex whenever it can actually run.
