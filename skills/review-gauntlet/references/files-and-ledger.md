@@ -13,7 +13,7 @@ files from colliding — see "Run identity and concurrency".
 | `lease.json` | This run's active-driver lease (`{agent, updated}`; see "Run lease") |
 | `review-<pr>-<n>.txt` | Codex's PR review output, round `n` |
 | `review-<pr>-<n>.plan.jsonl` | Orchestrator-authored review work units for round `n` |
-| `review-<pr>-<n>.progress.jsonl` | Reviewer progress events against the plan for round `n` |
+| `review-<pr>-<n>.progress.jsonl` | Round `n` review events: a mandatory `pass_identity` **first event** (orchestrator-written at dispatch — pr, pass, attempt, reviewed `head_sha`, `plan_id`), then reviewer progress against the plan, plus orchestrator `amendment_resolution` events |
 | `ci-<pr>.txt` | Latest `gh pr checks` snapshot for a PR (re-polled after the watch, not the watch stream) |
 | `abort-<id>.md` | Detailed log for an aborted finding-task |
 
@@ -34,8 +34,9 @@ survives `.tmp` cleanup. Everything else stays ephemeral under the per-run `<run
 
 One row per surviving finding. It is a **cache**, not the authoritative state — **ground truth is
 git + GitHub** (`gh pr list/view` for PRs and merged/open state, `git rev-parse HEAD` per branch for
-the live SHA, `gh pr checks` for live CI, and the `review-<pr>-<n>.txt` files for which verdicts
-exist on which SHA). Every wake re-derives what's due from those, then refreshes this file. So a
+the live SHA, `gh pr checks` for live CI, and each `review-<pr>-<n>.progress.jsonl`'s `pass_identity`
+first event for which SHA a verdict reviewed — the `review-<pr>-<n>.txt` records the verdict, not its
+SHA). Every wake re-derives what's due from those, then refreshes this file. So a
 stale or half-written ledger is self-healing — never act on it without reconciling against git/gh
 first.
 

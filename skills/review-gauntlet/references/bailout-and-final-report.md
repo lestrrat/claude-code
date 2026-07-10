@@ -16,6 +16,15 @@
   finished-run branch on "no open `fix-<run-id>-*` PR", and a PR-first pipeline almost always left one
   open — an aborted row is terminal and lacks two SATISFIED verdicts, so reconcile will never merge or
   keep driving it, but a dangling open PR would block terminal exit and heartbeat forever.
+- **Known-bad-SHA stall (no-op fix) → treat as a stuck task.** If a PR's tip is proven bad by a
+  `NOT SATISFIED` (so `reviews_ok=0` and dispatch refuses to relaunch a review on it — Stage 2a
+  `verdict_admissible` input 5) yet no fix subagent is in flight — a fix that committed nothing left it
+  unable to review *and* unable to advance — do NOT spin. Route it here (cap → retry once → abort);
+  never let the loop live-lock on "can't review, can't advance."
+- **Accepted-amendment budget exhausted → escalate to the user.** When a PR hits its per-`(head_sha,
+  plan-lineage)` accepted-amendment cap (Stage 2a), park the row and ask the user rather than
+  auto-rejecting the outstanding gap into a merge — a genuine late-discovered gap must not be silently
+  swallowed.
 - **Converging-but-expensively → escalate to the root-cause pass.** The bailouts above catch a *stuck*
   task; this catches one that's *progressing by whack-a-mole*. A targeted per-finding fix is right for
   the **first** `NOT SATISFIED` on a PR, or for genuinely independent findings. But on the **second**
@@ -39,6 +48,10 @@ When the loop exits, summarize:
 - **Aborted** — finding id, why, pointer to `abort-<id>.md`.
 - **Skipped** — REFUTED findings, UNCERTAIN ones the user should triage, and any API-changing fix the
   user was asked about and declined (with the change each would have needed).
+- **Rejected material amendments** — every `plan_amendment_request` a reviewer raised that the
+  orchestrator resolved `rejected-immaterial`, with its rationale (Stage 2a). The reviewer only raises
+  materially-important gaps, so a rejection is an override surfaced here so it is never silently
+  rubber-stamped.
 - Any worktrees left for inspection.
 
 The same outcomes are written to this run's durable carryover file
