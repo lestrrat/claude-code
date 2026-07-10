@@ -1,11 +1,21 @@
 ## Bailout
 
-- **1-hour cap per task** (measured from `started`). If a finding's task exceeds one hour without
-  merging, abort it cleanly and **retry once** from a fresh worktree (`attempts` += 1, reset
-  `started`).
-- On the **second** stuck/failure, abort permanently: stop work on that finding, write
-  `<rundir>/abort-<id>.md` with the full history (reviews, CI failures, diffs, what
-  blocked it), set status `aborted`, and **continue the other findings**.
+- **1-hour cap per task** — one hour of wall-clock since `started` without merging. The cap catches a
+  *stuck* task, not a slow external system, and the ledger records no separately-metered work time — so
+  key it off recorded row state, not a running subtraction of durations nothing stores: **do not fire
+  the cap on a wake where the row is blocked on an external wait** — `status == awaiting-api` (parked
+  for user approval), or `ci == pending` for the current `head_sha` (CI still running). Only a wake
+  where `started` is over an hour old *and* the row is agent-controlled (not in either wait) trips it.
+  When it trips, abort cleanly and **retry once** from a fresh worktree (`attempts` += 1, reset
+  `started`). **Supersede the prior attempt's PR** — close it noting the supersession — so a stale
+  open PR doesn't linger; the retry opens its own.
+- On the **second** stuck/failure, abort permanently: stop work on that finding, **close its open PR
+  and remove its gate labels**, write `<rundir>/abort-<id>.md` with the full history (reviews, CI
+  failures, diffs, what blocked it), set status `aborted`, and **continue the other findings**. Only
+  ever touch this run's own PRs. **Terminal detection requires the closure**: loop control gates the
+  finished-run branch on "no open `fix-<run-id>-*` PR", and a PR-first pipeline almost always left one
+  open — an aborted row is terminal and lacks two SATISFIED verdicts, so reconcile will never merge or
+  keep driving it, but a dangling open PR would block terminal exit and heartbeat forever.
 - **Converging-but-expensively → escalate to the root-cause pass.** The bailouts above catch a *stuck*
   task; this catches one that's *progressing by whack-a-mole*. A targeted per-finding fix is right for
   the **first** `NOT SATISFIED` on a PR, or for genuinely independent findings. But on the **second**
