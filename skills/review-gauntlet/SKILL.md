@@ -80,7 +80,7 @@ Read stage refs only when that stage/action is due:
    watches/fixes, base refresh; stop in-flight reviews doomed by a content change.
 5. Merge ready PRs one at a time until no candidate remains immediately ready after base refresh.
 6. **Slot audit before sleep** — every free fix/review slot must trace to a named reason (empty queue,
-   full cap, unmet precondition, external wait). A free slot with a pending finding or reviewable PR
+   unmet precondition, external wait). A free slot with a pending finding or reviewable PR
    means step 4 isn't done: return to it, then re-audit. Never reschedule with launchable work idle.
 7. Update carryover/final state if terminal; otherwise refresh lease and schedule next wake.
 
