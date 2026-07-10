@@ -23,7 +23,7 @@
 
 ## Worktrees
 
-ALWAYS use worktrees. NEVER work in root checkout.
+Use a worktree for any task that edits tracked files or mutates a branch — NEVER make such edits in the root checkout. Read-only work (analysis, exploration, answering questions, running queries) may run anywhere; do not build a worktree just to inspect.
 
 Path: `$PROJECT/.worktrees/<branch>`
 
@@ -37,17 +37,17 @@ Worktree directory name MUST match its checked-out branch. NEVER `git checkout <
 
 ### Migrate Root Changes to Worktree
 
-NEVER discard+redo. Exact sequence (each command is a separate Bash call):
+NEVER discard+redo. `git stash -u` carries staged, unstaged, AND untracked changes together; a bare `git diff` patch captures only unstaged tracked edits and leaves staged and untracked work behind in the root. Exact sequence (each command is a separate Bash call):
 
-1. `cd $PROJECT`
-2. `git diff > $PROJECT/.tmp/migrate.patch`
-3. `git worktree add $PROJECT/.worktrees/<branch> -b <branch>`
-4. `cd $PROJECT/.worktrees/<branch>`
-5. `git apply $PROJECT/.tmp/migrate.patch`
+1. `cd "$PROJECT"`
+2. `git stash push -u -m migrate` — moves staged, unstaged, and untracked changes into the stash; root is left clean at HEAD
+3. `git worktree add "$PROJECT/.worktrees/<branch>" -b <branch>`
+4. `cd "$PROJECT/.worktrees/<branch>"`
+5. `git stash apply` — restores every carried change here (all as unstaged; re-`git add` what you had staged)
 6. Verify build/tests pass in worktree
-7. ONLY after 6 succeeds: `cd $PROJECT`
-8. `git checkout .`
-9. `rm $PROJECT/.tmp/migrate.patch`
+7. ONLY after 6 succeeds: `git stash drop`
+
+Carries staged + unstaged + untracked files. Does NOT carry ignored files (add `-a` to step 2 only if you truly need them) or work already committed on the wrong branch. Step 2 leaves the root clean, so no `git checkout .` is needed.
 
 ## PR Comments
 
