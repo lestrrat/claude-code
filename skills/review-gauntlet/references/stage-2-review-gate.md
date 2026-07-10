@@ -172,11 +172,19 @@ below), where a `gh` round-trip already happens — never on the ordinary count.
 any core input is **recorded and reported, but NOT counted**. Evaluate the inputs — 1–5 and 7 are
 local-only; 6 requires a `gh` call and runs at accept-label only:
 
-1. **Per-pass identity** — the pass's `pass_identity.head_sha` equals the SHA the pass targeted **and**
-   the live tip (`git rev-parse HEAD`) at count time, **and** `pass_identity.plan_id == hash(current
-   review-<pr>-<n>.plan.jsonl)`. A progress file with no `pass_identity` first line is inadmissible.
-   (Staleness guard: an accepted amendment rewrote the plan → new hash → any in-flight pass
-   auto-invalidates.) [I2/I10]
+1. **Per-pass content identity** — the verdict must still describe the PR's *current* content, **and**
+   `pass_identity.plan_id == hash(current review-<pr>-<n>.plan.jsonl)`. Content identity holds when
+   EITHER (a) the pass's `pass_identity.head_sha` equals the live tip (`git rev-parse HEAD`) at count
+   time; OR (b) the live tip differs from `pass_identity.head_sha` ONLY by a clean base-only
+   rebase/merge that left the PR's own patch unchanged — tested LOCALLY by `git patch-id`:
+   `git diff <base>...<pass_identity.head_sha>` and `git diff <base>...<live tip>` yield the same
+   patch-id (grep/jq/git-level work, no `gh`/network — input 1 stays part of the per-tally LOCAL core).
+   `pass_identity.head_sha` must be REACHABLE for that diff to compute; if it was garbage-collected or
+   force-pushed away, the check cannot be made → **fail closed: inadmissible**. A progress file with no
+   `pass_identity` first line is inadmissible. Any PR-content change — review fix, CI fix,
+   conflict-resolving rebase, formatter/bot commit, manual push — alters the PR's own patch, so neither
+   (a) nor (b) holds and earlier verdicts go stale. (Staleness guard: an accepted amendment rewrote the
+   plan → new hash → any in-flight pass auto-invalidates.) [I2/I10]
 2. **Output wellformedness** — `review-<pr>-<n>.txt` has exactly one final `VERDICT:` line
    (`grep -c '^VERDICT:'` == 1); a SATISFIED carries exactly one `RESIDUAL-RISK:` line immediately
    above it (`grep -c '^RESIDUAL-RISK:'` == 1). [I6]
@@ -252,10 +260,12 @@ verdicts are correlated and this is not a probabilistic proof of correctness. Wh
 buys is a re-roll of a stochastic reviewer: a fresh execution, with none of the first pass's context
 to anchor it, that can catch a defect the first pass happened to miss. Each pass's reviewed SHA is
 durably its `pass_identity.head_sha` (the progress JSONL's mandatory first event, not the `.txt`). A
-verdict counts only while `verdict_admissible` holds and that SHA equals the live tip. It also
-continues to count after `<base>` advances if the PR is still non-conflicting and the PR diff/content
-is unchanged (e.g. clean base-only rebase); carry `reviews_ok` forward to the new `head_sha` and set
-`ci = pending`. The moment PR content changes — review fix, CI fix, conflict-resolving rebase, a
+verdict counts only while `verdict_admissible` holds — i.e. while `pass_identity.head_sha` still
+describes the live PR content: either it equals the live tip, or the live tip differs only by a clean
+base-only rebase/merge with the PR's own patch unchanged (`verdict_admissible` input 1's `git patch-id`
+test). It also continues to count after `<base>` advances if the PR is still non-conflicting and the PR
+diff/content is unchanged (e.g. clean base-only rebase); carry `reviews_ok` forward to the new
+`head_sha` and set `ci = pending`. The moment PR content changes — review fix, CI fix, conflict-resolving rebase, a
 formatter/bot commit on the PR branch, or manual push — earlier verdicts are stale and `reviews_ok`
 drops to 0. Pinning to SHA plus the clean-base-only exception makes the gate verifiable from git while
 not burning reviews merely because another PR merged cleanly. A `NOT SATISFIED` invalidates that

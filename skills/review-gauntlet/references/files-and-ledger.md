@@ -53,9 +53,11 @@ id | slug | branch | worktree | pr | head_sha | reviews_ok | ci | attempts | sta
 ```
 
 - `head_sha` — the branch tip (`git rev-parse HEAD`) that `reviews_ok` and `ci` describe. `ci` is
-  pinned to this exact SHA. `reviews_ok` is pinned to this SHA **unless** the only change is a clean
-  base-only rebase/merge with the PR diff unchanged; then carry `reviews_ok` forward to the new
-  `head_sha` and set `ci = pending`.
+  pinned to this exact SHA. `reviews_ok` is pinned to the PR's *content*, not the raw tip: carry it
+  forward when the only change is a clean base-only rebase/merge with the PR's own diff unchanged —
+  tested locally by `git patch-id` of `git diff <base>...<old head_sha>` == `git patch-id` of
+  `git diff <base>...<new tip>` (`verdict_admissible` input 1) — then advance `head_sha` to the new tip
+  and set `ci = pending`. Any PR-content change re-pins it and resets `reviews_ok` to 0.
 - `reviews_ok` — number of fresh, context-isolated **admissible** SATISFIED verdicts (each passing
   `verdict_admissible` in `stage-2-review-gate.md`; a merely-present SATISFIED that fails any input does
   NOT increment) recorded against this PR's current content (need 2).
