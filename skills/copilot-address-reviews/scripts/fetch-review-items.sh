@@ -78,16 +78,20 @@ validate_page() {
   local connection_path="$2"
   local label="$3"
 
-  if [[ "$(jq -r 'if (has("errors") and (.errors | length > 0)) then "yes" else "no" end' "$path")" == "yes" ]]; then
-    local messages
-    messages=$(jq -r '[.errors[].message] | join("; ")' "$path" 2>/dev/null)
-    die "$label: GraphQL API returned errors: $messages"
-  fi
-
+  # One type-safe pass: reject a non-object top-level value up front (a raw
+  # `has(...)`/`getpath(...)` on an array/scalar would abort jq), then surface
+  # GraphQL errors, then assert the connection shape. The `if ! result=$(...)`
+  # form captures jq's exit status explicitly so a parse error on a non-JSON
+  # page routes to the SAME labeled die below instead of tripping `set -e` with
+  # a raw jq trace.
   local result
-  result=$(jq -r --arg cp "$connection_path" '
+  if ! result=$(jq -r --arg cp "$connection_path" '
     def conn: getpath($cp | ltrimstr(".") | split("."));
-    if (conn == null) then
+    if (type != "object") then
+      "GraphQL page is not a JSON object (got \(type))"
+    elif (has("errors") and (.errors | length > 0)) then
+      "GraphQL API returned errors: \([.errors[].message] | join("; "))"
+    elif (conn == null) then
       "connection object is null (\($cp))"
     elif ((conn.nodes | type) != "array") then
       "\($cp).nodes is missing or not an array"
@@ -103,10 +107,12 @@ validate_page() {
     else
       "ok"
     end
-  ' "$path" 2>/dev/null)
+  ' "$path" 2>/dev/null); then
+    die "$label: unreadable GraphQL page (invalid JSON or not a JSON object): $path"
+  fi
 
   if [[ "$result" != "ok" ]]; then
-    die "$label: ${result:-malformed GraphQL page}"
+    die "$label: $result"
   fi
 }
 
