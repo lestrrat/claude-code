@@ -123,13 +123,21 @@ validate_page() {
 validate_nested_comment_connections() {
   local path="$1"
   local label="$2"
+  # Same treatment as validate_page: a jq-level `$c | type != "object"` guard runs
+  # BEFORE any `$c.nodes` access, so a node whose .comments is an array/scalar yields
+  # a labeled, thread-naming message instead of aborting jq on a string-index error.
+  # The `if ! result=$(...)` form then captures jq's exit status explicitly, so any
+  # residual jq failure routes to the SAME labeled die below rather than tripping
+  # `set -e` with a raw (stderr-suppressed) trace.
   local result
-  result=$(jq -r '
+  if ! result=$(jq -r '
     [ .data.repository.pullRequest.reviewThreads.nodes[]
       | .id as $tid
       | .comments as $c
       | if ($c == null) then
           "thread \($tid): comments connection is null"
+        elif (($c | type) != "object") then
+          "thread \($tid): comments connection is not an object (got \($c | type))"
         elif (($c.nodes | type) != "array") then
           "thread \($tid): comments.nodes is missing or not an array"
         elif (($c.pageInfo | type) != "object") then
@@ -145,9 +153,12 @@ validate_nested_comment_connections() {
           empty
         end
     ] | .[0] // "ok"
-  ' "$path" 2>/dev/null)
+  ' "$path" 2>/dev/null); then
+    die "$label: unreadable GraphQL page (invalid JSON or not a JSON object): $path"
+  fi
+
   if [[ "$result" != "ok" ]]; then
-    die "$label: ${result:-malformed nested comments connection}"
+    die "$label: $result"
   fi
 }
 
