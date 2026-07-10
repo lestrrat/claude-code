@@ -47,7 +47,8 @@ control step 3).
 
 If a pass's `codex exec` can't return a verdict (quota/rate-limit, auth, timeout, or other system
 error — see "Codex fallback"), retry it once, then run that pass as a **fresh subagent** reviewing the
-whole `<base>...HEAD` diff and ending in the same `VERDICT:` line. A subagent fallback pass counts
+whole `<base>...HEAD` diff under the same output contract — a `RESIDUAL-RISK` line on SATISFIED
+immediately above exactly one final `VERDICT:` line. A subagent fallback pass counts
 toward the two-SATISFIED-verdict gate exactly like a codex pass — it's another fresh, context-isolated
 re-roll in its own context.
 
