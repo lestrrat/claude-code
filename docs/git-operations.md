@@ -40,14 +40,14 @@ Worktree directory name MUST match its checked-out branch. NEVER `git checkout <
 NEVER discard+redo. `git stash -u` carries staged, unstaged, AND untracked changes together; a bare `git diff` patch captures only unstaged tracked edits and leaves staged and untracked work behind in the root. Exact sequence (each command is a separate Bash call):
 
 1. `cd "$PROJECT"`
-2. `git stash push -u -m migrate` — moves staged, unstaged, and untracked changes into the stash; root is left clean at HEAD
+2. `git stash push -u -m migrate` — moves staged, unstaged, and untracked *files* into the stash. It does NOT descend into nested worktree/repo directories: `git stash push -u` prints `Ignoring path .worktrees/<name>/` and leaves `.worktrees/` in place. So the root is NOT clean afterward — `git status` still shows `?? .worktrees/`. That leftover is EXPECTED; do NOT delete or clean it.
 3. `git worktree add "$PROJECT/.worktrees/<branch>" -b <branch>`
 4. `cd "$PROJECT/.worktrees/<branch>"`
 5. `git stash apply` — restores every carried change here (all as unstaged; re-`git add` what you had staged)
 6. Verify build/tests pass in worktree
 7. ONLY after 6 succeeds: `git stash drop`
 
-Carries staged + unstaged + untracked files. Does NOT carry ignored files (add `-a` to step 2 only if you truly need them) or work already committed on the wrong branch. Step 2 leaves the root clean, so no `git checkout .` is needed.
+Carries staged + unstaged + untracked files. Does NOT carry ignored files (add `-a` to step 2 only if you truly need them) or work already committed on the wrong branch. It also skips nested worktree/repo directories, so `.worktrees/` stays in the root untouched. NEVER run `git clean -fd` in the root to "tidy up" the leftover `?? .worktrees/` — it would destroy every worktree under it. (Adding `.worktrees/` to `.gitignore` would hide that leftover, but that is a separate change.)
 
 ## PR Comments
 
