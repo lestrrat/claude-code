@@ -105,16 +105,22 @@ so the driver never blocks; each completion is its own wake.
 
    **Gate — slot audit before any heartbeat.** Sleeping is a privilege you earn by proving there is
    nothing to launch, not the default when reconcile turns up no news. Every wake, heartbeat included,
-   before you may `ScheduleWakeup`: count fix subagents and review processes in flight against the ~8
-   cap, and for **each free slot** name the concrete reason it is empty — no `pending` finding without a
-   PR, no PR *eligible to start a review per step 3* (tip has <2 SATISFIED, preconditions clear, and no
-   review already running for that SHA — the corroborating second review waits for the first to return
-   SATISFIED, so a PR mid-review is not fillable), no red CI without a fix in flight, no exited watch on
-   a `pending` PR, no mergeable PR. If any such work exists while a slot is free, **dispatch step 3 was
-   not finished: go back and launch it, then re-audit** — do not reschedule around idle-but-fillable
-   slots. Rescheduling is legal ONLY once the live state matches the narrow
-   "Allowed idle state" in step 3 in full. A heartbeat is a fallback timer, never a substitute for
-   filling slots this wake.
+   before you may `ScheduleWakeup`, audit the **two concurrency pools separately** — fix subagents and
+   review processes each carry their own ~8 cap — and match each pool's free slots only against work
+   that pool can actually run:
+   - **free fix slot** → fillable if there is a `pending` finding without a PR, a red CI with no fix in
+     flight, or an unmet precondition to clear (Copilot items / conflict-rebase / CI) on one of this
+     run's PRs.
+   - **free review slot** → fillable if there is a PR *eligible to start a review per step 3* (tip has
+     <2 SATISFIED, preconditions clear, and no review already running for that SHA — the corroborating
+     second review waits for the first to return SATISFIED, so a PR mid-review is not fillable).
+
+   A pool whose cap is genuinely full is a valid idle reason **for that pool alone**: a free slot in one
+   pool never obliges you to launch work the *other*, full pool owns. If any pool has a free slot with
+   fillable work for it — or a PR is mergeable and undrained — **dispatch step 3 was not finished: go
+   back and launch it, then re-audit**; do not reschedule around idle-but-fillable slots. Rescheduling
+   is legal ONLY once the live state matches the narrow "Allowed idle state" in step 3 in full. A
+   heartbeat is a fallback timer, never a substitute for filling slots this wake.
 
    - Any sweep shard or verification chunk still running, or any non-terminal finding/PR remains →
      refresh this run's lease, then set a `ScheduleWakeup` heartbeat
