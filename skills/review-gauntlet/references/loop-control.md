@@ -102,6 +102,18 @@ so the driver never blocks; each completion is its own wake.
    it, sync `<base>`, reconcile remaining candidates, and repeat while another PR is immediately
    mergeable (Stage 3).
 5. **Reschedule or exit.**
+
+   **Gate — slot audit before any heartbeat.** Sleeping is a privilege you earn by proving there is
+   nothing to launch, not the default when reconcile turns up no news. Every wake, heartbeat included,
+   before you may `ScheduleWakeup`: count fix subagents and review processes in flight against the ~8
+   cap, and for **each free slot** name the concrete reason it is empty — no `pending` finding without a
+   PR, no PR whose tip has <2 SATISFIED verdicts with clear preconditions, no red CI without a fix in
+   flight, no exited watch on a `pending` PR, no mergeable PR. If any such work exists while a slot is
+   free, **dispatch step 3 was not finished: go back and launch it, then re-audit** — do not reschedule
+   around idle-but-fillable slots. Rescheduling is legal ONLY once the live state matches the narrow
+   "Allowed idle state" in step 3 in full. A heartbeat is a fallback timer, never a substitute for
+   filling slots this wake.
+
    - Any sweep shard or verification chunk still running, or any non-terminal finding/PR remains →
      refresh this run's lease, then set a `ScheduleWakeup` heartbeat
      (`prompt: "/review-gauntlet --run <run-id> --token <agent-token> <args>"` — `--run` rebinds the
