@@ -90,3 +90,6 @@ Read stage refs only when that stage/action is due:
 - NEVER touch another run's PR/branch/worktree.
 - NEVER merge over red/pending CI or stale review verdicts.
 - NEVER add "Test plan" section to PR bodies.
+- NEVER commit run/scratch files (`.tmp/review-gauntlet/**`, `.review-gauntlet/**`) — they are
+  driver bookkeeping, not repo content. Stage only the specific source files a fix touches, by explicit
+  path; never `git add -A`/`git add .`. Ensure both paths are git-ignored (add them if missing).
