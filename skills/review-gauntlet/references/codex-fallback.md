@@ -15,7 +15,8 @@ report that the pass ran on the Claude-subagent fallback.
   codex would have. The streamed verification (Stage 0 step 2) is unchanged.
 - **Stage 2a (per-PR review)** → spawn a **fresh** subagent to review the whole `<base>...HEAD` diff
   with an equally adversarial pass, using the same `review-<pr>-<n>.plan.jsonl` /
-  `review-<pr>-<n>.progress.jsonl` protocol and — on SATISFIED — the same
+  `review-<pr>-<n>.progress.jsonl` protocol — planned units, then the unstructured adversarial sweep —
+  and — on SATISFIED — the same
   `RESIDUAL-RISK: <area> — <why>` line immediately above exactly one final `VERDICT: SATISFIED` /
   `VERDICT: NOT SATISFIED` line. Each fallback pass is still a fresh, context-isolated re-roll in its
   own subagent/context, so the two-SATISFIED-verdict gate holds exactly as it does with codex.
