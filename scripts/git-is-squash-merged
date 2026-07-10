@@ -7,7 +7,12 @@
 #   0  — squash-merged (output: "squash-merged:cherry" or "squash-merged:patch-id")
 #   1  — not merged
 #   2  — usage error
-set -eu
+#
+# SAFETY: a false "merged" verdict causes the caller to delete the branch, which
+# can be the only copy of the work. This script therefore FAILS CLOSED: a merged
+# verdict is emitted only when the branch's net effect is proven present in the
+# CURRENT target tree. Any error or ambiguity resolves to "not merged".
+set -euo pipefail
 
 if [ $# -ne 2 ]; then
   echo "Usage: git-is-squash-merged <target-branch> <candidate-branch>" >&2
@@ -17,30 +22,63 @@ fi
 TARGET="$1"
 BRANCH="$2"
 
+# verify_present_in_target — prove the branch's net effect is already contained in
+# the CURRENT target tree. Simulates merging BRANCH into TARGET with a 3-way merge:
+# if the merge would not change TARGET's tree, then every change the branch carries
+# is already present in target. This accounts for later reverts on target (which
+# make the merge reintroduce the change → non-no-op → not contained) and for target
+# having advanced with unrelated commits. A historical patch match is NOT enough.
+# Returns 0 only on a proven no-op merge; any failure/conflict/ambiguity returns 1.
+verify_present_in_target() {
+  local target_tree merged_tree
+  target_tree=$(git rev-parse --verify --quiet "$TARGET^{tree}") || return 1
+  # `git merge-tree --write-tree` exits 0 on a clean merge and prints the merged
+  # tree oid on the first line; a non-zero exit (conflicts or error) means the
+  # branch is not cleanly contained, so fail closed.
+  merged_tree=$(git merge-tree --write-tree "$TARGET" "$BRANCH" 2>/dev/null) || return 1
+  merged_tree=${merged_tree%%$'\n'*}
+  [ -n "$merged_tree" ] || return 1
+  [ "$merged_tree" = "$target_tree" ]
+}
+
+# patch_id_of — print the stable patch-id for a diff range, or fail (non-zero) if
+# the underlying `git diff` errored. Never lets an errored diff look like an empty
+# (== merged) result. Prints nothing for a genuinely empty diff (exit 0).
+# --no-ext-diff keeps patch-ids canonical and immune to a hostile diff.external.
+patch_id_of() {
+  local diff_out pid_out
+  diff_out=$(git diff --no-ext-diff "$@") || return 1
+  [ -n "$diff_out" ] || return 0
+  pid_out=$(printf '%s\n' "$diff_out" | git patch-id --stable) || return 1
+  printf '%s' "${pid_out%% *}"
+}
+
 # Phase 1: Single-commit cherry check.
-# If git cherry reports all commits as already present (-) or no output,
-# the branch is squash-merged.
+# If git cherry reports all commits as already present (-) or no output, the branch
+# is a squash-merge candidate — but only trust it if the changes are still present
+# in the current target tree (a cherry match survives a later revert).
 cherry_output=$(git cherry -v "$TARGET" "$BRANCH" 2>/dev/null) || {
   echo "error: git cherry failed for $TARGET..$BRANCH" >&2
   exit 2
 }
 
-if [ -z "$cherry_output" ]; then
-  echo "squash-merged:cherry"
-  exit 0
+cherry_all_merged=true
+if [ -n "$cherry_output" ]; then
+  while IFS= read -r line; do
+    case "$line" in
+      +*) cherry_all_merged=false; break ;;
+    esac
+  done <<< "$cherry_output"
 fi
 
-# Check if every line starts with "- " (all merged).
-has_unmerged=false
-while IFS= read -r line; do
-  case "$line" in
-    +*) has_unmerged=true; break ;;
-  esac
-done <<< "$cherry_output"
-
-if [ "$has_unmerged" = false ]; then
-  echo "squash-merged:cherry"
-  exit 0
+if [ "$cherry_all_merged" = true ]; then
+  if verify_present_in_target; then
+    echo "squash-merged:cherry"
+    exit 0
+  fi
+  # Historical cherry match but changes absent from the current target tree
+  # (e.g. cherry-picked then reverted). Fail closed.
+  exit 1
 fi
 
 # Phase 2: Combined patch-id check for multi-commit squash merges.
@@ -51,24 +89,35 @@ base=$(git merge-base "$TARGET" "$BRANCH") || {
   exit 2
 }
 
-branch_pid_line=$(git diff "$base".."$BRANCH" | git patch-id --stable 2>/dev/null) || true
-if [ -z "$branch_pid_line" ]; then
-  # Empty diff means no real changes — treat as merged.
-  echo "squash-merged:patch-id"
-  exit 0
+# Combined branch diff patch-id. A failed diff exits 2 (error) — never "merged".
+branch_pid=$(patch_id_of "$base" "$BRANCH") || {
+  echo "error: git diff failed for $base..$BRANCH" >&2
+  exit 2
+}
+if [ -z "$branch_pid" ]; then
+  # Branch introduces no net change vs base — candidate merged, but still require
+  # the change to be present in the current target tree before saying so.
+  if verify_present_in_target; then
+    echo "squash-merged:patch-id"
+    exit 0
+  fi
+  exit 1
 fi
-branch_pid=${branch_pid_line%% *}
 
 # Compare against each commit on the target side since the merge-base.
 while IFS= read -r hash; do
-  commit_pid_line=$(git diff "$hash"^.."$hash" | git patch-id --stable 2>/dev/null) || true
-  if [ -z "$commit_pid_line" ]; then
-    continue
-  fi
-  commit_pid=${commit_pid_line%% *}
+  commit_pid=$(patch_id_of "$hash^" "$hash") || {
+    echo "error: git diff failed for $hash" >&2
+    exit 2
+  }
+  [ -n "$commit_pid" ] || continue
   if [ "$branch_pid" = "$commit_pid" ]; then
-    echo "squash-merged:patch-id"
-    exit 0
+    # Historical patch-id match — confirm it survives in the current target tree.
+    if verify_present_in_target; then
+      echo "squash-merged:patch-id"
+      exit 0
+    fi
+    exit 1
   fi
 done < <(git log --format=%H "$base".."$TARGET")
 
