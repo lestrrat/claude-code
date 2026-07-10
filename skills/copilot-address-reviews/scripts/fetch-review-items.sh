@@ -20,10 +20,64 @@ Options:
 EOF
 }
 
+die() {
+  printf '%s\n' "$*" >&2
+  exit 1
+}
+
 require_cmd() {
   if ! command -v "$1" >/dev/null 2>&1; then
     echo "missing required command: $1" >&2
     exit 1
+  fi
+}
+
+# Arity guard: call BEFORE reading $2 for a value-taking option.
+# remaining_argc is $# at the point of the case branch (includes the flag itself),
+# so a present value means remaining_argc >= 2.
+require_value() {
+  local flag="$1"
+  local remaining_argc="$2"
+  if [[ "$remaining_argc" -lt 2 ]]; then
+    die "option $flag requires a value"
+  fi
+}
+
+# Existence + well-formedness guard for a JSON input file.
+read_json_file() {
+  local path="$1"
+  local label="$2"
+  if [[ ! -f "$path" ]]; then
+    die "$label: file not found: $path"
+  fi
+  if ! jq empty "$path" >/dev/null 2>&1; then
+    die "$label: not valid JSON: $path"
+  fi
+}
+
+# Fail closed on a GraphQL response that is an error payload or is missing the
+# reviewThreads shape, instead of silently yielding zero items.
+validate_graphql_response() {
+  local path="$1"
+  local label="$2"
+  if [[ "$(jq -r 'if (has("errors") and (.errors | length > 0)) then "yes" else "no" end' "$path")" == "yes" ]]; then
+    local messages
+    messages=$(jq -r '[.errors[].message] | join("; ")' "$path" 2>/dev/null)
+    die "$label: GraphQL API returned errors: $messages"
+  fi
+  if [[ "$(jq -r '.data.repository.pullRequest != null' "$path" 2>/dev/null)" != "true" ]]; then
+    die "$label: GraphQL response has no pull request (data.repository.pullRequest is null)"
+  fi
+  if [[ "$(jq -r '.data.repository.pullRequest.reviewThreads.nodes | type == "array"' "$path" 2>/dev/null)" != "true" ]]; then
+    die "$label: GraphQL response reviewThreads.nodes is missing or not an array"
+  fi
+}
+
+# Pre-flight the user-supplied Copilot author regex before jq test() aborts on it.
+validate_regex() {
+  local pattern="$1"
+  if ! jq -n --arg p "$pattern" '"" | test($p; "i")' >/dev/null 2>&1; then
+    die "invalid --copilot-pattern: not a valid regex: $pattern"
   fi
 }
 
@@ -149,6 +203,7 @@ fetch_all_review_threads() {
         }
       ' >"$page_json"
 
+    validate_graphql_response "$page_json" "review threads page $page_number"
     merge_review_thread_page "$output_json" "$page_json"
 
     has_next=$(jq -r '.data.repository.pullRequest.reviewThreads.pageInfo.hasNextPage // false' "$page_json")
@@ -241,8 +296,10 @@ extract_repo_parts() {
 
   IFS='/' read -r REPO_OWNER REPO_NAME PULL_SEGMENT PR_NUMBER _ <<<"$trimmed"
   if [[ -z "${REPO_OWNER:-}" || -z "${REPO_NAME:-}" || "${PULL_SEGMENT:-}" != "pull" || -z "${PR_NUMBER:-}" ]]; then
-    echo "unable to parse GitHub PR URL: $pr_url" >&2
-    exit 1
+    die "unable to parse GitHub PR URL: $pr_url"
+  fi
+  if ! [[ "$PR_NUMBER" =~ ^[0-9]+$ ]]; then
+    die "invalid PR number in URL: expected an integer, got '$PR_NUMBER' ($pr_url)"
   fi
 }
 
@@ -256,26 +313,32 @@ COPILOT_PATTERN='copilot|github-copilot|copilot-pull-request-reviewer'
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --tmp-dir)
+      require_value "$1" "$#"
       TMP_DIR="$2"
       shift 2
       ;;
     --pr-view-json)
+      require_value "$1" "$#"
       PR_VIEW_JSON="$2"
       shift 2
       ;;
     --review-threads-json)
+      require_value "$1" "$#"
       REVIEW_THREADS_JSON="$2"
       shift 2
       ;;
     --raw-output)
+      require_value "$1" "$#"
       RAW_OUTPUT="$2"
       shift 2
       ;;
     --dedup-output)
+      require_value "$1" "$#"
       DEDUP_OUTPUT="$2"
       shift 2
       ;;
     --copilot-pattern)
+      require_value "$1" "$#"
       COPILOT_PATTERN="$2"
       shift 2
       ;;
@@ -315,6 +378,8 @@ SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 require_cmd jq
 require_cmd python3
 
+validate_regex "$COPILOT_PATTERN"
+
 if [[ -z "$PR_VIEW_JSON" || -z "$REVIEW_THREADS_JSON" ]]; then
   require_cmd gh
 fi
@@ -323,6 +388,8 @@ if [[ -z "$PR_VIEW_JSON" ]]; then
   PR_VIEW_JSON="$TMP_DIR/gh-pr-view.json"
   gh pr view "$PR_URL" --json number,title,url,headRefName,baseRefName,files >"$PR_VIEW_JSON"
 fi
+
+read_json_file "$PR_VIEW_JSON" "--pr-view-json"
 
 CANONICAL_PR_URL=$(jq -r '.url' "$PR_VIEW_JSON")
 extract_repo_parts "$CANONICAL_PR_URL"
@@ -333,13 +400,16 @@ if [[ -z "$REVIEW_THREADS_JSON" ]]; then
   fetch_all_thread_comments "$REVIEW_THREADS_JSON"
 fi
 
+read_json_file "$REVIEW_THREADS_JSON" "--review-threads-json"
+validate_graphql_response "$REVIEW_THREADS_JSON" "--review-threads-json"
+
 jq -n \
   --slurpfile pr "$PR_VIEW_JSON" \
   --slurpfile threads "$REVIEW_THREADS_JSON" \
   --arg copilot_pattern "$COPILOT_PATTERN" \
   '
     ($pr[0]) as $prv
-    | ($threads[0].data.repository.pullRequest.reviewThreads.nodes // []) as $thread_nodes
+    | ($threads[0].data.repository.pullRequest.reviewThreads.nodes) as $thread_nodes
     | [
         $thread_nodes[]
         | select(.isResolved | not)
