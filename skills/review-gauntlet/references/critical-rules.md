@@ -54,7 +54,8 @@
   Never spend a review over open Copilot items, a red check, or a conflicting PR (Stage 2a).
 - Reviews are fresh, context-isolated re-rolls: separate `codex exec` each pass, no shared context.
   Two passes re-roll a stochastic reviewer to catch a missed defect — they are NOT statistically
-  independent (same model/prompt/diff), so the gate is a miss-catcher, not a proof of correctness.
+  independent (the same diff, task, and protocol correlate them; the normal codex path also shares
+  model/prompt), so the gate is a miss-catcher, not a proof of correctness.
 - Before each review, write an orchestrator-owned `review-<pr>-<n>.plan.jsonl`; reviewers append
   `review-<pr>-<n>.progress.jsonl` events against planned units. Meaningful progress = planned unit
   `done` or accepted plan amendment, not vague "still working" output. Stale meaningful progress →

@@ -136,8 +136,9 @@ Every pass reviews the whole `<base>...HEAD` diff (not just the last fix-delta),
 are always judged as one piece.
 
 **Gate is two fresh, context-isolated SATISFIED verdicts on the same PR content.** The two passes are
-not statistically or epistemically independent observations — same model, same prompt, same diff make
-their verdicts correlated, so this is not a probabilistic proof of correctness. What the second pass
+not statistically or epistemically independent observations — they judge the same diff under the same
+review task and protocol (and, on the normal both-codex path, the same model and prompt), so their
+verdicts are correlated and this is not a probabilistic proof of correctness. What the second pass
 buys is a re-roll of a stochastic reviewer: a fresh execution, with none of the first pass's context
 to anchor it, that can catch a defect the first pass happened to miss. Record the reviewed SHA
 (`git rev-parse HEAD`) with each pass. A verdict counts while its SHA equals the live tip. It also
