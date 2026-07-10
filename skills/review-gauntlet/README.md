@@ -36,7 +36,7 @@ fresh run") to force a new run immediately without being asked.
 ## What to expect
 
 It opens a pull request for each problem worth fixing and merges them itself once they pass two
-separate, context-isolated reviews of the same commit and CI is green. (Two fresh reviews rather than
+separate, context-isolated reviews of the same PR content and CI is green. (Two fresh reviews rather than
 one because a single stochastic review can miss a defect — not because two runs are statistically
 independent; same model and diff make them correlated.) There's no approval step along the way, so
 starting it is your sign-off — and a whole-repo run can spin up several PRs and keep going for a
