@@ -95,11 +95,11 @@ so the driver never blocks; each completion is its own wake.
    review processes in flight, refilling each free slot immediately; queue the rest. **Launch, do not
    wait — never barrier on a group of findings before dispatching the next.**
    Allowed idle state is narrow and explicit: no sweep shard or verification chunk is dispatchable,
-   no pending finding can launch, no PR can start a review, no CI-, precondition-, or review-fix
-   subagent is due (a NOT SATISFIED review owes a scoped fix subagent, Stage 2a), no exited
-   watch needs relaunching, no PR is mergeable, and every remaining wait is external (an in-flight
-   background task — sweep, verification, review, CI watch, or a fix / CI-fix / review-fix subagent),
-   user/API approval, or a genuinely full cap.
+   no pending finding can launch, no PR can start a review, no **fix subagent** is due (one fix-pool
+   category covers CI failures, unmet preconditions, and NOT SATISFIED reviews alike — Stage 2), no
+   exited watch needs relaunching, no PR is mergeable, and every remaining wait is external (an
+   in-flight background task — sweep, verification, review, CI watch, or **fix subagent**), user/API
+   approval, or a genuinely full cap.
 4. **Merge** queued PRs as a serialized drain: re-confirm one candidate against the live SHA, merge
    it, sync `<base>`, reconcile remaining candidates, and repeat while another PR is immediately
    mergeable (Stage 3).
