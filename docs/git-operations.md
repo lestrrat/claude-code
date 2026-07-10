@@ -47,7 +47,7 @@ NEVER discard+redo. `git stash -u` carries staged, unstaged, AND untracked chang
 6. Verify build/tests pass in worktree
 7. ONLY after 6 succeeds: `git stash drop`
 
-Carries staged + unstaged + untracked files. Does NOT carry ignored files (add `-a` to step 2 only if you truly need them) or work already committed on the wrong branch. It also skips nested worktree/repo directories, so `.worktrees/` stays in the root untouched. NEVER run `git clean -fd` in the root to "tidy up" the leftover `?? .worktrees/` — it would destroy every worktree under it. (Adding `.worktrees/` to `.gitignore` would hide that leftover, but that is a separate change.)
+Carries staged + unstaged + untracked files. Does NOT carry ignored files (add `-a` to step 2 only if you truly need them) or work already committed on the wrong branch. It also skips nested worktree/repo directories, so `.worktrees/` stays in the root untouched. Leave the leftover `?? .worktrees/` alone — do NOT try to "tidy up" the root. `git clean -fd` SKIPS nested worktrees (prints `Skipping repository .worktrees/<name>`) and will NOT remove them, but `git clean -ffd` (double force) WILL delete every worktree under `.worktrees/` — NEVER run it in the root during this procedure. (Adding `.worktrees/` to `.gitignore` would hide that leftover, but that is a separate change.)
 
 ## PR Comments
 
