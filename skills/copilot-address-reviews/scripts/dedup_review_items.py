@@ -7,6 +7,7 @@ import json
 import re
 import sys
 from pathlib import Path
+from typing import NoReturn
 
 
 STOP_WORDS = {
@@ -42,12 +43,49 @@ def usage() -> int:
     return 1
 
 
+def fail(msg: str) -> NoReturn:
+    print(msg, file=sys.stderr)
+    raise SystemExit(1)
+
+
+def _coerce_optional_str(value: object) -> "str | None":
+    if isinstance(value, str):
+        return value
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return str(value)
+    return None
+
+
+def coerce_item(raw: object) -> dict:
+    if not isinstance(raw, dict):
+        fail("each raw review item must be a JSON object")
+    item = dict(raw)
+
+    comment_id = item.get("comment_id")
+    item["comment_id"] = "" if comment_id is None else str(comment_id)
+
+    item["thread_id"] = _coerce_optional_str(item.get("thread_id"))
+    item["author_login"] = _coerce_optional_str(item.get("author_login"))
+
+    body = item.get("body")
+    item["body"] = "" if body is None else str(body)
+
+    return item
+
+
 def load_items(path: Path) -> list[dict]:
-    with path.open() as infile:
-        data = json.load(infile)
+    try:
+        with path.open() as infile:
+            data = json.load(infile)
+    except FileNotFoundError:
+        fail(f"raw review items file not found: {path}")
+    except json.JSONDecodeError as exc:
+        fail(f"raw review items file is not valid JSON: {path} ({exc})")
     if not isinstance(data, list):
-        raise ValueError("raw review items must be a JSON array")
-    return data
+        fail("raw review items must be a JSON array")
+    return [coerce_item(x) for x in data]
 
 
 def normalize_text(text: str) -> str:
@@ -150,7 +188,9 @@ def dedup_items(items: list[dict]) -> dict:
         )
         representative["duplicate_count"] = len(group["items"]) - 1
         representative["grouped_comment_ids"] = [item.get("comment_id") for item in group["items"]]
-        representative["grouped_thread_ids"] = sorted({item.get("thread_id") for item in group["items"]})
+        representative["grouped_thread_ids"] = sorted(
+            {item.get("thread_id") for item in group["items"] if item.get("thread_id")}
+        )
         representative["grouped_author_logins"] = sorted(
             {item.get("author_login") for item in group["items"] if item.get("author_login")}
         )
