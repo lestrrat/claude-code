@@ -62,12 +62,12 @@ After merge, return to your worktree and start next iteration.
    ```
    go test ./... -timeout=10m $EXTRA_ARGS > .tmp/go-test-all.txt 2>&1
    ```
-3. **Find first failure** — search `.tmp/go-test-all.txt`:
-   - first `--- FAIL:` line
-   - else first `FAIL\tgithub.com/...` line
-   - else first `panic:` / compile error
-   - Use earliest line only. Ignore later failures.
-4. **Classify** — actionable → continue. Non-actionable → document blocker, stop.
+3. **Find next actionable failure** — scan `.tmp/go-test-all.txt` in order:
+   - `--- FAIL:` lines, then `FAIL\tgithub.com/...` lines, then `panic:` / compile errors.
+   - Classify each (step 4). Target the first actionable failure; record any non-actionable
+     failure as a blocker and keep scanning past it.
+   - If no actionable failure remains → STOP and report the recorded blockers.
+4. **Classify** — actionable → target it, continue. Non-actionable → record blocker, keep scanning.
 5. **Reproduce** — narrow rerun of failing test:
    ```
    go test ./<pkg> -run 'TestName/subtest$' -count=1 -timeout=30s
@@ -76,13 +76,13 @@ After merge, return to your worktree and start next iteration.
 7. **Fix** root cause — even if it lives in a different package. Prefer source fix over test edit.
 8. **Narrow verify** — rerun the specific test.
 9. **Full verify** — rerun full suite with exact command from step 2.
-10. If more actionable failures → repeat from step 3.
-11. **Lint + Commit + Merge** — these three are ONE atomic step. Do all three every time:
+10. **Lint + Commit + Merge** — these three are ONE atomic step. Do all three every time,
+    for this one fix, before looping to the next failure:
     a. Run lint: `golangci-lint run ./... > .tmp/golangci-lint.txt 2>&1`
     b. If lint errors → fix them. Re-run until clean. Do NOT skip this.
-    c. Commit all fixes in this iteration.
+    c. Commit the fix.
     d. Merge back to `$PARENT`.
-12. Repeat from step 1.
+11. Repeat from step 1.
 
 **STOP** only when no actionable failures remain.
 
