@@ -55,6 +55,8 @@ Read stage refs only when that stage/action is due:
 - **PR-first:** implement -> commit -> push -> open/update PR -> watch CI + review PR HEAD.
 - **Work-conserving:** every wake reconciles, folds completions, launches all due work up to caps,
   drains still-ready PRs serially, then reschedules only when no useful action remains launchable.
+  A heartbeat wake is a full dispatch pass, not a status peek — it must fill every free slot it can
+  before sleeping again.
 - **Driver never blocks:** sweeps, verifications, reviews, and CI watches run as background tasks —
   completions are wakes. Stage 0 pipelines into fan-out (survivors fix while later shards sweep).
   A pending-CI PR always has a live watch; a review doomed by a pending content change is stopped,
@@ -80,7 +82,11 @@ Read stage refs only when that stage/action is due:
 4. Launch all due work up to caps — sweep shards, verification chunks, fix fan-out, reviews, CI
    watches/fixes, base refresh; stop in-flight reviews doomed by a content change.
 5. Merge ready PRs one at a time until no candidate remains immediately ready after base refresh.
-6. Update carryover/final state if terminal; otherwise refresh lease and schedule next wake.
+6. **Slot audit before sleep** — re-run dispatch (step 4) across both pools (fix and review each have
+   their own cap) and sleep only when no free slot in either pool can still launch work. If dispatch
+   could still fill a slot, step 4 isn't done: return to it, then re-audit. Never reschedule with
+   launchable work idle.
+7. Update carryover/final state if terminal; otherwise refresh lease and schedule next wake.
 
 ## Critical Rules
 
