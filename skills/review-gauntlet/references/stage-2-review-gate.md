@@ -200,14 +200,36 @@ local-only; 6 requires a `gh` call and runs at accept-label only:
    above it (`grep -c '^RESIDUAL-RISK:'` == 1). [I6]
 3. **Unit completion, with non-hollow evidence** — every `unit` id in `review-<pr>-<n>.plan.jsonl` has a
    matching `done` progress event in `review-<pr>-<n>.progress.jsonl`, **and** that event's `evidence` is
-   non-empty AND cites something concrete instead of merely restating the unit. Test the citation LOCALLY
-   (grep, no LLM/`gh`): the evidence must match at least one concrete-citation form — a `file:line` or a
-   filename carrying a code extension (`.go`/`.py`/`.sh`/`.md`/`.json`/`.jsonl`/`.txt`/`.ya?ml`); a
-   command/flag/operator or observed output (a `` `backticked` `` span, a `--flag`, `->`/`==`, an
-   `exit <n>`, a `name()` call, or a `snake_case` identifier); or a specific quoted/parenthetical span.
-   Empty evidence, or a bare restatement like `"checked the unit"`, fails this input. This is a **floor**
-   that rejects vacuous evidence — it does NOT certify the check was *substantive* (see the residue note
-   below). [I5]
+   non-empty AND matches ≥1 concrete-citation form. **Scope:** this input grades ONLY `done` events whose
+   `unit` id appears in that pass's `plan.jsonl`; sweep/summary pseudo-events (e.g. `unit:"sweep"` or
+   `unit:"verdict"`, which are never planned ids) are NOT planned units and are NOT graded here. Test the
+   citation LOCALLY — one `grep -E` over the `evidence` string, no LLM/subagent/`gh`/network — against this
+   EXACT alternation, so two agents running it independently agree on every string:
+
+   ```
+   [A-Za-z][A-Za-z0-9._/-]*:[0-9]|[A-Za-z0-9._/-]+\.(go|py|sh|md|json|jsonl|txt|ya?ml)|`[^`]+`|--[A-Za-z]|->|==|!=|<=|>=|[Ee]xit[ =]*[0-9]|[A-Za-z_][A-Za-z0-9_]+\(\)|[A-Za-z0-9]+[_-][A-Za-z0-9]
+   ```
+
+   Each branch is a self-contained form:
+   - **file:line** — `[A-Za-z][A-Za-z0-9._/-]*:[0-9]` — a named ref carrying a line/column number
+     (`stage-2:161`, `loop-control:87`, `SKILL.md:65`).
+   - **code-extension file** — `[A-Za-z0-9._/-]+\.(go|py|sh|md|json|jsonl|txt|ya?ml)` — a filename ending
+     in a recognized code extension.
+   - **backticked span** — `` `[^`]+` `` — a backtick pair with ≥1 inner char.
+   - **long-form CLI flag** — `--[A-Za-z]` — a `--flag`; a single-dash `-x` does NOT qualify.
+   - **arrow/comparison operator** — one of `->` `==` `!=` `<=` `>=`.
+   - **exit code** — `[Ee]xit[ =]*[0-9]` — matches `exit 1`, `exit1`, and `exit=1` alike (space optional).
+   - **empty-paren call** — `[A-Za-z_][A-Za-z0-9_]+\(\)` — an identifier immediately followed by `()`.
+   - **compound identifier** — `[A-Za-z0-9]+[_-][A-Za-z0-9]` — a token with an INTERNAL `_` or `-`
+     (`snake_case` OR `kebab-case`: `patch_id_of`, `fail-closed`, `multi-commit`). The internal separator
+     is what discriminates it from prose; a bare word with no `_`/`-` does NOT qualify.
+
+   There is deliberately NO open "quoted/parenthetical span" form: no length floor both admits genuine
+   evidence and rejects `"checked (x)"`/`(K)`, so it is removed rather than left vague. Empty evidence, or
+   a restatement carrying none of the forms above (`""`, `"checked the unit"`, `"verified"`,
+   `"looks good, done"`, `"reviewed the unit as planned"`, `"checked (x)"`), fails this input. This is a
+   **floor** that rejects vacuous evidence — it does NOT certify the check was *substantive* (see the
+   residue note below). [I5]
 4. **Amendment resolution** — every `plan_amendment_request` in the progress JSONL has a recorded
    `amendment_resolution`. Any unresolved request → inadmissible. Any `accepted` one → this pass ran
    under the superseded plan → non-countable, restart on the same SHA (see the amendment rules above). [I4]
