@@ -82,6 +82,16 @@ Rules:
 - For code, include at least one cross-cutting unit when behavior spans files or packages.
 - For non-code, include at least one cross-artifact/whole-piece unit when multiple artifacts/sections
   exist.
+- **Plan wellformedness — the orchestrator RUNS this before dispatch, not merely prefers it.** The plan
+  is the orchestrator's own guidance, so make the rules above a check it executes rather than prose it
+  hopes for. Before writing `pass_identity` and launching the pass, verify LOCALLY (jq over the
+  `plan.jsonl` plus `git diff --name-only <base>...HEAD`, no `gh`/LLM/subagent call): (i) every `unit`
+  has a non-empty `target` AND a non-empty `checks` array with ≥1 concrete check; (ii) all unit `id`s are
+  unique; (iii) the unit count is in the 5–15 band, or the plan carries an explicit override note;
+  (iv) ≥1 `cross-cutting` unit exists when the diff spans more than one file. A plan that fails any of
+  these is **not dispatched** — fix the plan first, then launch. (This gates the orchestrator's own plan;
+  it is distinct from the reviewer's coverage critique below and from `verdict_admissible` input 7, which
+  re-checks structural coverage at the fold.)
 - **The reviewer must not treat the plan as presumptively complete.** Before working the units, judge
   whether they cover the dimensions this target actually needs; deterministic coverage is a design
   goal, but the orchestrator's decomposition can still miss something. When a materially important
@@ -188,8 +198,16 @@ local-only; 6 requires a `gh` call and runs at accept-label only:
 2. **Output wellformedness** — `review-<pr>-<n>.txt` has exactly one final `VERDICT:` line
    (`grep -c '^VERDICT:'` == 1); a SATISFIED carries exactly one `RESIDUAL-RISK:` line immediately
    above it (`grep -c '^RESIDUAL-RISK:'` == 1). [I6]
-3. **Unit completion** — every `unit` id in `review-<pr>-<n>.plan.jsonl` has a matching `done` progress
-   event in `review-<pr>-<n>.progress.jsonl`. [I5]
+3. **Unit completion, with non-hollow evidence** — every `unit` id in `review-<pr>-<n>.plan.jsonl` has a
+   matching `done` progress event in `review-<pr>-<n>.progress.jsonl`, **and** that event's `evidence` is
+   non-empty AND cites something concrete instead of merely restating the unit. Test the citation LOCALLY
+   (grep, no LLM/`gh`): the evidence must match at least one concrete-citation form — a `file:line` or a
+   filename carrying a code extension (`.go`/`.py`/`.sh`/`.md`/`.json`/`.jsonl`/`.txt`/`.ya?ml`); a
+   command/flag/operator or observed output (a `` `backticked` `` span, a `--flag`, `->`/`==`, an
+   `exit <n>`, a `name()` call, or a `snake_case` identifier); or a specific quoted/parenthetical span.
+   Empty evidence, or a bare restatement like `"checked the unit"`, fails this input. This is a **floor**
+   that rejects vacuous evidence — it does NOT certify the check was *substantive* (see the residue note
+   below). [I5]
 4. **Amendment resolution** — every `plan_amendment_request` in the progress JSONL has a recorded
    `amendment_resolution`. Any unresolved request → inadmissible. Any `accepted` one → this pass ran
    under the superseded plan → non-countable, restart on the same SHA (see the amendment rules above). [I4]
@@ -205,9 +223,14 @@ local-only; 6 requires a `gh` call and runs at accept-label only:
    falls under a cross-cutting unit); `>= 1` cross-cutting unit when the diff spans multiple files; unit
    count in the 5–15 band (or an explicit override note in the plan). [I9, structural half]
 
-Inputs 2/3/7 are a plain parse of the JSONL/txt — keep them that way. This mechanizes only the
-*structural* half of coverage: whether a unit's `checks` are **substantive** vs. hollow stays reviewer
-judgement (an independent, still-prose residue), as does the two passes' epistemic non-independence.
+Inputs 2/3/7 are a plain parse of the JSONL/txt — keep them that way. **What is deliberately NOT
+mechanized, and stays prose residue:** (a) input 3's evidence floor rejects empty/boilerplate evidence
+but cannot judge whether a check was *substantive* rather than hollow-but-concrete — that is an
+irreducible judgement call, unenforced; (b) input 7's coverage proxy is still gameable by one trivial
+unit per changed file (the 5–15 band and per-file naming can be satisfied while covering nothing); and
+(c) the two passes stay epistemically correlated — same diff, same protocol, same model — which no
+countability predicate addresses. These are acknowledged residue, not closed gates; do not read the
+mechanization above as more than the floor it is.
 
 As each verdict lands, tally it for the SHA it ran on:
 
