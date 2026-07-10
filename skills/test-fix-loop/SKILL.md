@@ -62,12 +62,12 @@ After merge, return to your worktree and start next iteration.
    ```
    go test ./... -timeout=10m $EXTRA_ARGS > .tmp/go-test-all.txt 2>&1
    ```
-3. **Find first failure** — search `.tmp/go-test-all.txt`:
-   - first `--- FAIL:` line
-   - else first `FAIL\tgithub.com/...` line
-   - else first `panic:` / compile error
-   - Use earliest line only. Ignore later failures.
-4. **Classify** — actionable → continue. Non-actionable → document blocker, stop.
+3. **Find next actionable failure** — scan `.tmp/go-test-all.txt` in order:
+   - `--- FAIL:` lines, then `FAIL\tgithub.com/...` lines, then `panic:` / compile errors.
+   - Classify each (step 4). Target the first actionable failure; record any non-actionable
+     failure as a blocker and keep scanning past it.
+   - If no actionable failure remains → STOP and report the recorded blockers.
+4. **Classify** — actionable → target it, continue. Non-actionable → record blocker, keep scanning.
 5. **Reproduce** — narrow rerun of failing test:
    ```
    go test ./<pkg> -run 'TestName/subtest$' -count=1 -timeout=30s
@@ -76,13 +76,13 @@ After merge, return to your worktree and start next iteration.
 7. **Fix** root cause — even if it lives in a different package. Prefer source fix over test edit.
 8. **Narrow verify** — rerun the specific test.
 9. **Full verify** — rerun full suite with exact command from step 2.
-10. If more actionable failures → repeat from step 3.
-11. **Lint + Commit + Merge** — these three are ONE atomic step. Do all three every time:
+10. **Lint + Commit + Merge** — these three are ONE atomic step. Do all three every time,
+    for this one fix, before looping to the next failure:
     a. Run lint: `golangci-lint run ./... > .tmp/golangci-lint.txt 2>&1`
     b. If lint errors → fix them. Re-run until clean. Do NOT skip this.
-    c. Commit all fixes in this iteration.
+    c. Commit the fix.
     d. Merge back to `$PARENT`.
-12. Repeat from step 1.
+11. Repeat from step 1.
 
 **STOP** only when no actionable failures remain.
 
@@ -126,15 +126,18 @@ After merge, return to your worktree and start next iteration.
 Your context window is finite. Wasting it on upfront analysis of all tests leaves
 nothing for actual fixes. Follow these rules to maximize fixes per session:
 
-- **One test at a time.** Find the first failure, debug it, fix it, verify, commit, merge.
-  Then sync and move to the next. Do NOT analyze all assigned tests before fixing any.
+- **One failure at a time.** Find the next actionable failure (step 3 scan rules), debug it,
+  fix it, verify, commit, merge. Then sync and move to the next. Do NOT analyze all assigned
+  tests before fixing any.
 - **Commit early, commit often.** After each fix (even partial), commit and merge back
   to `$PARENT`. This preserves your work even if you run out of context later.
   Other agents (and future retry waves) benefit from your merged fixes immediately.
 - **Minimize reads.** Read only the specific functions/lines relevant to the current
   failure. Do not read entire files "for context" — use Grep to find the exact code.
-- **Skip test output you don't need.** After running tests, Grep for `--- FAIL:` to
-  find the first failure. Do not read the entire test output file.
+- **Skip test output you don't need.** Find the next actionable failure using step 3's scan
+  rules — Grep for `--- FAIL:`, then `FAIL\t`, then `panic:` / compile errors (a compile or
+  package-level failure may not print `--- FAIL:` at all); record blockers. Read only enough
+  surrounding output per candidate — never the entire test output file.
 - **Don't re-analyze blockers.** If a test requires a large feature that you cannot
   implement within a few focused edits, document it as blocked and move on immediately.
   Do not spend context exploring "how hard it would be."
