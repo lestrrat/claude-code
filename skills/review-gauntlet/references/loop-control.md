@@ -107,10 +107,12 @@ so the driver never blocks; each completion is its own wake.
    nothing to launch, not the default when reconcile turns up no news. Every wake, heartbeat included,
    before you may `ScheduleWakeup`: count fix subagents and review processes in flight against the ~8
    cap, and for **each free slot** name the concrete reason it is empty — no `pending` finding without a
-   PR, no PR whose tip has <2 SATISFIED verdicts with clear preconditions, no red CI without a fix in
-   flight, no exited watch on a `pending` PR, no mergeable PR. If any such work exists while a slot is
-   free, **dispatch step 3 was not finished: go back and launch it, then re-audit** — do not reschedule
-   around idle-but-fillable slots. Rescheduling is legal ONLY once the live state matches the narrow
+   PR, no PR *eligible to start a review per step 3* (tip has <2 SATISFIED, preconditions clear, and no
+   review already running for that SHA — the corroborating second review waits for the first to return
+   SATISFIED, so a PR mid-review is not fillable), no red CI without a fix in flight, no exited watch on
+   a `pending` PR, no mergeable PR. If any such work exists while a slot is free, **dispatch step 3 was
+   not finished: go back and launch it, then re-audit** — do not reschedule around idle-but-fillable
+   slots. Rescheduling is legal ONLY once the live state matches the narrow
    "Allowed idle state" in step 3 in full. A heartbeat is a fallback timer, never a substitute for
    filling slots this wake.
 
