@@ -119,6 +119,12 @@ codex exec --sandbox workspace-write -c "sandbox_workspace_write.network_access=
    limit your review to the listed units, and do NOT rewrite the plan yourself. Then append progress \
    JSONL to $PROJECT/<rundir>/review-<pr>-<n>.progress.jsonl as each planned unit starts and finishes; \
    progress counts only when it references a planned unit and includes concrete evidence. \
+   After every planned unit is done, do a brief UNSTRUCTURED ADVERSARIAL SWEEP: deliberately hunt for \
+   defects no plan unit would naturally catch — cross-unit interactions, unstated assumptions, edge \
+   cases, and whole categories the plan did not enumerate. This complements the plan, never replaces \
+   it. Report only concrete file:line defects that would actually fail, at the same bar as any finding; \
+   finding nothing is a fine and common result — do NOT lower the bar or list speculative 'might be \
+   fragile' concerns. \
    List any issues with file:line and a concrete fix. If — and only if — your verdict is SATISFIED, \
    output one line immediately above the verdict, in the form RESIDUAL-RISK: <area or file> — <why \
    this was the hardest part to verify fully>, naming the part of the diff you checked with the LEAST \
@@ -140,6 +146,16 @@ As each verdict lands, tally it for the SHA it ran on:
 
 Every pass reviews the whole `<base>...HEAD` diff (not just the last fix-delta), so accumulated fixes
 are always judged as one piece.
+
+**Unstructured adversarial sweep.** After a pass finishes every planned unit, it runs one brief
+free-form sweep for defects the plan's decomposition would never surface — cross-unit interactions,
+unstated assumptions, edge cases, and whole categories no unit enumerated. It **complements** the
+structured plan and never replaces it: the units still run in full first. The sweep reports through the
+normal finding channel — only concrete `file:line` defects that would actually fail, held to the same
+bar as any other finding, so a real one drives `NOT SATISFIED`. It is NOT a brainstorm: "nothing found"
+is the expected, honest common outcome, and speculative "might be fragile" notes are not findings and
+do not block SATISFIED. (This is distinct from a `plan_amendment_request`, which fixes the plan
+structurally; the sweep finds a defect now, regardless of the plan.)
 
 **Residual-risk signal (SATISFIED only).** A SATISFIED verdict carries one
 `RESIDUAL-RISK: <area> — <why>` line naming the part of the diff the pass verified with the least
