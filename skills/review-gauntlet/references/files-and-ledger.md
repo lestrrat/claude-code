@@ -13,7 +13,7 @@ files from colliding — see "Run identity and concurrency".
 | `lease.json` | This run's active-driver lease (`{agent, updated}`; see "Run lease") |
 | `review-<pr>-<n>.txt` | Codex's PR review output, round `n` |
 | `review-<pr>-<n>.plan.jsonl` | Orchestrator-authored review work units for round `n` |
-| `review-<pr>-<n>.progress.jsonl` | Reviewer progress events against the plan for round `n` |
+| `review-<pr>-<n>.progress.jsonl` | Round `n` review events: a mandatory `pass_identity` **first event** (orchestrator-written at dispatch — pr, pass, attempt, reviewed `head_sha`, `plan_id`), then reviewer progress against the plan, plus orchestrator `amendment_resolution` events |
 | `ci-<pr>.txt` | Latest `gh pr checks` snapshot for a PR (re-polled after the watch, not the watch stream) |
 | `abort-<id>.md` | Detailed log for an aborted finding-task |
 
@@ -34,8 +34,9 @@ survives `.tmp` cleanup. Everything else stays ephemeral under the per-run `<run
 
 One row per surviving finding. It is a **cache**, not the authoritative state — **ground truth is
 git + GitHub** (`gh pr list/view` for PRs and merged/open state, `git rev-parse HEAD` per branch for
-the live SHA, `gh pr checks` for live CI, and the `review-<pr>-<n>.txt` files for which verdicts
-exist on which SHA). Every wake re-derives what's due from those, then refreshes this file. So a
+the live SHA, `gh pr checks` for live CI, and each `review-<pr>-<n>.progress.jsonl`'s `pass_identity`
+first event for which SHA a verdict reviewed — the `review-<pr>-<n>.txt` records the verdict, not its
+SHA). Every wake re-derives what's due from those, then refreshes this file. So a
 stale or half-written ledger is self-healing — never act on it without reconciling against git/gh
 first.
 
@@ -52,11 +53,14 @@ id | slug | branch | worktree | pr | head_sha | reviews_ok | ci | attempts | sta
 ```
 
 - `head_sha` — the branch tip (`git rev-parse HEAD`) that `reviews_ok` and `ci` describe. `ci` is
-  pinned to this exact SHA. `reviews_ok` is pinned to this SHA **unless** the only change is a clean
-  base-only rebase/merge with the PR diff unchanged; then carry `reviews_ok` forward to the new
-  `head_sha` and set `ci = pending`.
-- `reviews_ok` — number of fresh, context-isolated SATISFIED verdicts recorded against this PR's
-  current content (need 2).
+  pinned to this exact SHA. `reviews_ok` is pinned to the PR's *content*, not the raw tip: carry it
+  forward when the only change is a clean base-only rebase/merge with the PR's own diff unchanged —
+  tested locally by `git patch-id` of `git diff <base>...<old head_sha>` == `git patch-id` of
+  `git diff <base>...<new tip>` (`verdict_admissible` input 1) — then advance `head_sha` to the new tip
+  and set `ci = pending`. Any PR-content change re-pins it and resets `reviews_ok` to 0.
+- `reviews_ok` — number of fresh, context-isolated **admissible** SATISFIED verdicts (each passing
+  `verdict_admissible` in `stage-2-review-gate.md`; a merely-present SATISFIED that fails any input does
+  NOT increment) recorded against this PR's current content (need 2).
 - `ci` — `green` / `red` / `pending` / `none` for `head_sha`.
 - `attempts` — task attempts so far (for the retry-once bailout).
 - `started` — wall-clock start of the current attempt (for the 1-hour cap).

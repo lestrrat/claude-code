@@ -62,7 +62,10 @@ Read stage refs only when that stage/action is due:
 - **Run isolation:** touch only this run's `<rundir>`, ledger, labels, branches, PRs, and worktrees.
 - **One active driver:** lease controls ownership; never double-drive one run.
 - **Base branch is data:** read `base_branch` from ledger every wake; never assume `main`.
-- **Two-review gate:** two fresh, context-isolated `SATISFIED` verdicts on same live PR content + green CI.
+- **Two-review gate:** two fresh, context-isolated, **admissible** `SATISFIED` verdicts on same live PR
+  content + green CI. A verdict counts toward `reviews_ok` only if it passes `verdict_admissible`
+  (Stage 2a): pass-identity/plan-id, output wellformedness, unit completion, amendment resolution,
+  not-known-bad SHA, Copilot clear, plan-coverage proxy.
 - **Sequential same-PR reviews:** launch review 2 only after review 1 is `SATISFIED`.
 - **Progress ledger:** reviewer progress means planned unit `done` or accepted amendment, not vague
   output.

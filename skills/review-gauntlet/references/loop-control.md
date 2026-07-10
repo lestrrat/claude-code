@@ -57,12 +57,18 @@ so the driver never blocks; each completion is its own wake.
    (`gh label create … --force`, as in Stage 1 — including this run's `gauntlet-run-<run-id>`), then
    for every PR **of this run** (its label, or on a `fix-<run-id>-` branch): ensure it carries
    `gauntlet-run-<run-id>`, and set its status label to match its **live** gate state —
-   `gauntlet-accepted` if its current HEAD holds two SATISFIED verdicts, else `gauntlet-reviewing`;
+   `gauntlet-accepted` if its current HEAD holds two **admissible** SATISFIED verdicts with `ci ==
+   green|none` and Copilot clear (Stage 2a `verdict_admissible` + accept predicate), else
+   `gauntlet-reviewing`;
    add the status label if it has none. **Never touch another run's PRs.**
 2. **Fold in completions.** For any background task that finished (sweep shard →
    `findings-raw-<shard>.md` and verification chunk → `verdicts-<chunk>.md`, acted on per Stage 0;
    CI watch → `ci-<pr>.txt`; review → `review-<pr>-<n>.txt`, with `review-<pr>-<n>.progress.jsonl` as
-   its liveness evidence), record the result against the SHA it ran on and act per Stage 0/2.
+   its liveness evidence and `pass_identity` first event), record the result against the SHA it ran on
+   and act per Stage 0/2. Resolve any pending `plan_amendment_request` on this same wake (append an
+   `amendment_resolution`; never leave it pending), then a SATISFIED review increments `reviews_ok`
+   **only if `verdict_admissible(pr, n)` holds** (Stage 2a) — an inadmissible SATISFIED is recorded and
+   reported but not counted.
 3. **Dispatch due work — non-blocking, idempotent, bounded, work-conserving.** Scan the whole run,
    not just the PR/job that woke you. Launch every due action that fits a free slot before returning.
    Launch only what is actually due *and not already in flight* (check ground truth first, never the
@@ -78,9 +84,14 @@ so the driver never blocks; each completion is its own wake.
      starting more.
    - current tip has < 2 SATISFIED verdicts, its **review preconditions are clear** (no unaddressed
      Copilot review items, CI not red, no merge conflict with `<base>` — see Stage 2a preconditions),
-     and no review running for that SHA → launch **one** review pass as a **background** task (one at
-     a time per PR — the second only after the first is SATISFIED; Stage 2a). If a precondition is
-     dirty, clear it first (address Copilot items / fix CI / rebase) instead of spending a review;
+     the tip is **not a SHA already proven bad** by a `NOT SATISFIED` with no content change since
+     (`verdict_admissible` input 5 — never relaunch a review on a known-bad SHA; a fresh review is due
+     only once a fix advances HEAD), and no review running for that SHA → launch **one** review pass as
+     a **background** task (one at a time per PR — the second only after the first is SATISFIED; Stage
+     2a). If a precondition is dirty, clear it first (address Copilot items / fix CI / rebase) instead of
+     spending a review. **Deadlock guard:** if the tip is known-bad with `reviews_ok=0` and no fix
+     subagent is in flight (a no-op fix left it unable to review and unable to advance), do NOT spin —
+     route it to the stuck-task cap / bailout (Bailout) rather than relaunching or idling;
    - CI red and no CI-fix subagent is already in flight for that PR/SHA → dispatch a scoped fix
      subagent (Stage 2b); different PRs may fix CI concurrently within the cap.
    - CI snapshot reads `pending` for a PR whose watch task has already exited → **relaunch the watch

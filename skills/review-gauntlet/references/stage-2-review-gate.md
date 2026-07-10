@@ -87,17 +87,41 @@ Rules:
   goal, but the orchestrator's decomposition can still miss something. When a materially important
   review dimension is omitted (or a unit is wrong), the reviewer MUST append a `plan_amendment_request`
   event naming the gap rather than silently reviewing only the listed units — an unraised omission is a
-  reviewer failure. Requesting an amendment is the *only* sanctioned response: the reviewer never
-  rewrites the plan or self-grants units, and unapproved amendments do NOT count as plan units. The
-  orchestrator folds that request on the next wake and either updates the plan + restarts the review
-  pass, or ignores it with a note; the reviewer completes the existing units meanwhile.
+  reviewer failure. Requesting an amendment is the *only* sanctioned response: the reviewer **proposes,
+  never vetoes** — it never rewrites the plan or self-grants units, and unapproved amendments do NOT
+  count as plan units.
 
-Progress JSONL schema:
+  **The orchestrator resolves — durably, on the fold wake it first sees the request** (it may NOT leave
+  a request pending indefinitely) — by appending an `amendment_resolution` event to the same progress
+  JSONL:
+  - `decision:"accepted"` → update the plan (this yields a new `plan_id`), and the pass that raised it
+    is **non-countable**: the review **restarts on the same SHA** under the new plan **as a new
+    dispatch** — `<n>` increments, so it writes a fresh `review-<pr>-<n>.{plan,progress}.jsonl` pair and
+    NEVER appends to the raising pass's progress file (which still carries the unresolved amendment).
+    Bound this to defeat a reviewer that vetoes-by-amendment or a livelock where every pass "finds" a new gap: allow
+    at most **2 accepted amendments per `(head_sha, plan-lineage)`** — an accepted amendment changes the
+    plan, not the PR content, so keying on `head_sha` alone would never reset the budget. On exhaustion,
+    do NOT auto-reject the gap into a merge — **escalate to the user** (park the row, Bailout); a
+    genuine late-discovered gap must not be silently swallowed into a false merge.
+  - `decision:"rejected-immaterial"` → record the rationale; the accompanying verdict may still count if
+    every other `verdict_admissible` input passes. Because the reviewer only raises materially-important
+    gaps, a rejection is an orchestrator override — **carry it into the final report** (Bailout) so it
+    can never be silently rubber-stamped.
+
+  The reviewer completes the existing units meanwhile.
+
+Progress JSONL schema. The orchestrator writes a **mandatory `pass_identity` first event** when it
+dispatches the pass (`git rev-parse HEAD` at dispatch is the reviewed SHA; `plan_id` is the hash of the
+pass's `review-<pr>-<n>.plan.jsonl`); the reviewer then appends progress; the orchestrator appends
+`amendment_resolution` events as it resolves requests. A progress file whose first line is not a
+`pass_identity` is inadmissible (`verdict_admissible` input 1):
 
 ```
+{"type":"pass_identity","pr":7,"pass":1,"attempt":1,"head_sha":"<git rev-parse HEAD at dispatch>","plan_id":"<hash of review-7-1.plan.jsonl>","ts":"2026-07-06T00:00:00Z"}
 {"type":"progress","unit":"u01","status":"started","ts":"2026-07-06T00:00:00Z"}
 {"type":"progress","unit":"u01","status":"done","ts":"2026-07-06T00:04:00Z","evidence":"checked canonicalization paths and edge-case tests"}
 {"type":"plan_amendment_request","ts":"2026-07-06T00:05:00Z","reason":"diff changes generated docs; add doc consistency unit","proposed_unit":{"id":"u99","kind":"docs","target":"docs/generated.md","checks":["sync with API behavior"]}}
+{"type":"amendment_resolution","ref":"2026-07-06T00:05:00Z","decision":"accepted","rationale":"real gap; plan expanded, pass restarts","ts":"2026-07-06T00:06:00Z"}
 ```
 
 Meaningful progress = a `done` event for a planned unit, or an accepted plan amendment. `started`
@@ -134,15 +158,74 @@ codex exec --sandbox workspace-write -c "sandbox_workspace_write.network_access=
    'VERDICT: SATISFIED' or 'VERDICT: NOT SATISFIED'."   # run in background
 ```
 
+**`verdict_admissible(pr, n)` — the countability chokepoint.** A SATISFIED verdict is only *countable*
+toward `reviews_ok` (versus merely *present* in a file) when this predicate holds. Every
+SATISFIED-consuming decision — the tally below and the accept-label — routes through it. **Inputs 1–5
+and 7 are its per-tally core: a cheap, deterministic, LOCAL parse** the orchestrator runs at the fold
+over files that already exist — grep/jq over `review-<pr>-<n>.{txt,plan.jsonl,progress.jsonl}` plus
+local git (`git rev-parse HEAD`, `git diff --name-only`), **never** an LLM or subagent/codex call and
+**never a `gh`/network round-trip** (delegating it would cost a full review on the hot path at every
+fold, and a `gh` fetch on every tally is that same hot-path cost without adding safety). Those six run
+at **every** tally. **Input 6 (Copilot clear) is the one input that needs a `gh` call**, so it is NOT
+part of the per-tally local parse: it is evaluated **only at the accept-label decision** (the tally
+below), where a `gh` round-trip already happens — never on the ordinary count. A SATISFIED that fails
+any core input is **recorded and reported, but NOT counted**. Evaluate the inputs — 1–5 and 7 are
+local-only; 6 requires a `gh` call and runs at accept-label only:
+
+1. **Per-pass content identity** — the verdict must still describe the PR's *current* content, **and**
+   `pass_identity.plan_id == hash(current review-<pr>-<n>.plan.jsonl)`. Content identity holds when
+   EITHER (a) the pass's `pass_identity.head_sha` equals the live tip (`git rev-parse HEAD`) at count
+   time; OR (b) the live tip differs from `pass_identity.head_sha` ONLY by a clean base-only
+   rebase/merge that left the PR's own patch unchanged — tested LOCALLY by `git patch-id`:
+   `git diff <base>...<pass_identity.head_sha>` and `git diff <base>...<live tip>` yield the same
+   patch-id (grep/jq/git-level work, no `gh`/network — input 1 stays part of the per-tally LOCAL core).
+   `pass_identity.head_sha` must be REACHABLE for that diff to compute; if it was garbage-collected or
+   force-pushed away, the check cannot be made → **fail closed: inadmissible**. A progress file with no
+   `pass_identity` first line is inadmissible. Any PR-content change — review fix, CI fix,
+   conflict-resolving rebase, formatter/bot commit, manual push — alters the PR's own patch, so neither
+   (a) nor (b) holds and earlier verdicts go stale. (Staleness guard: an accepted amendment rewrote the
+   plan → new hash → any in-flight pass auto-invalidates.) [I2/I10]
+2. **Output wellformedness** — `review-<pr>-<n>.txt` has exactly one final `VERDICT:` line
+   (`grep -c '^VERDICT:'` == 1); a SATISFIED carries exactly one `RESIDUAL-RISK:` line immediately
+   above it (`grep -c '^RESIDUAL-RISK:'` == 1). [I6]
+3. **Unit completion** — every `unit` id in `review-<pr>-<n>.plan.jsonl` has a matching `done` progress
+   event in `review-<pr>-<n>.progress.jsonl`. [I5]
+4. **Amendment resolution** — every `plan_amendment_request` in the progress JSONL has a recorded
+   `amendment_resolution`. Any unresolved request → inadmissible. Any `accepted` one → this pass ran
+   under the superseded plan → non-countable, restart on the same SHA (see the amendment rules above). [I4]
+5. **Not-known-bad** — the pass's `head_sha` is not a SHA already carrying a `NOT SATISFIED` (some prior
+   pass's `pass_identity.head_sha` == this SHA with a NOT-SATISFIED verdict) and no intervening content
+   change. This input is also consulted at **dispatch** (Loop control step 3) to refuse a review on a
+   known-bad SHA. [I11]
+6. **Copilot clear** — **accept-label only; requires a `gh` call, so it is NOT part of the per-tally
+   local parse.** At the accept-label decision, re-fetch unresolved Copilot items **scoped to THIS PR**
+   (verify the JSON is for this PR per the 2a precondition; do not trust the shared
+   `.tmp/copilot-review-items.json` blindly) and require none. [I7]
+7. **Plan-coverage proxy** — every changed file in `<base>...HEAD` is named by some unit `target` (or
+   falls under a cross-cutting unit); `>= 1` cross-cutting unit when the diff spans multiple files; unit
+   count in the 5–15 band (or an explicit override note in the plan). [I9, structural half]
+
+Inputs 2/3/7 are a plain parse of the JSONL/txt — keep them that way. This mechanizes only the
+*structural* half of coverage: whether a unit's `checks` are **substantive** vs. hollow stays reviewer
+judgement (an independent, still-prose residue), as does the two passes' epistemic non-independence.
+
 As each verdict lands, tally it for the SHA it ran on:
 
 - **NOT SATISFIED** → dispatch a scoped fix subagent into that worktree with the issue list; it
   commits + pushes → HEAD advances → the SHA's tally is void. A later wake starts a fresh review on
   the new tip. (Because reviews are sequential, no second review was spent on this broken commit.)
-- **SATISFIED** → record it. If it's the **first** for this SHA, the next wake launches the second
-  (corroborating) review on the same SHA. If it's the **second** SATISFIED on the same SHA, the
-  review gate is met for this HEAD — swap the PR's label:
-  `gh pr edit <pr> --remove-label gauntlet-reviewing --add-label gauntlet-accepted`.
+- **SATISFIED** → run `verdict_admissible(pr, n)`'s **local core (inputs 1–5 and 7)** — no `gh` call at
+  the ordinary tally. If it fails, record the verdict as non-countable with the failing input as the
+  reason, report it, and do **not** touch `reviews_ok` (an `accepted`-amendment failure restarts the
+  pass on the same SHA). If it passes, increment `reviews_ok`. If it's the **first** admissible
+  SATISFIED for this SHA, the next wake launches the second (corroborating) review on the same SHA. On
+  the **second** admissible SATISFIED on the same SHA, evaluate the accept predicate — **the two
+  admissible SATISFIED verdicts AND `ci == green|none` AND input 6 (Copilot clear, evaluated now via the
+  scoped `gh` re-fetch)**. Only when all three hold is the review gate met for this HEAD; swap the PR's
+  label:
+  `gh pr edit <pr> --remove-label gauntlet-reviewing --add-label gauntlet-accepted`. (Folding CI +
+  Copilot into the accept predicate is what stops the label claiming "accepted" while CI is still
+  pending. Input 6's `gh` fetch is spent here, once at the accept decision, not on every tally.)
 
 Every pass reviews the whole `<base>...HEAD` diff (not just the last fix-delta), so accumulated fixes
 are always judged as one piece.
@@ -175,11 +258,14 @@ not statistically or epistemically independent observations — they judge the s
 review task and protocol (and, on the normal both-codex path, the same model and prompt), so their
 verdicts are correlated and this is not a probabilistic proof of correctness. What the second pass
 buys is a re-roll of a stochastic reviewer: a fresh execution, with none of the first pass's context
-to anchor it, that can catch a defect the first pass happened to miss. Record the reviewed SHA
-(`git rev-parse HEAD`) with each pass. A verdict counts while its SHA equals the live tip. It also
-continues to count after `<base>` advances if the PR is still non-conflicting and the PR diff/content
-is unchanged (e.g. clean base-only rebase); carry `reviews_ok` forward to the new `head_sha` and set
-`ci = pending`. The moment PR content changes — review fix, CI fix, conflict-resolving rebase, a
+to anchor it, that can catch a defect the first pass happened to miss. Each pass's reviewed SHA is
+durably its `pass_identity.head_sha` (the progress JSONL's mandatory first event, not the `.txt`). A
+verdict counts only while `verdict_admissible` holds — i.e. while `pass_identity.head_sha` still
+describes the live PR content: either it equals the live tip, or the live tip differs only by a clean
+base-only rebase/merge with the PR's own patch unchanged (`verdict_admissible` input 1's `git patch-id`
+test). It also continues to count after `<base>` advances if the PR is still non-conflicting and the PR
+diff/content is unchanged (e.g. clean base-only rebase); carry `reviews_ok` forward to the new
+`head_sha` and set `ci = pending`. The moment PR content changes — review fix, CI fix, conflict-resolving rebase, a
 formatter/bot commit on the PR branch, or manual push — earlier verdicts are stale and `reviews_ok`
 drops to 0. Pinning to SHA plus the clean-base-only exception makes the gate verifiable from git while
 not burning reviews merely because another PR merged cleanly. A `NOT SATISFIED` invalidates that
@@ -187,7 +273,8 @@ content's tally even before a fix lands. The two satisfied verdicts and green CI
 same live PR content; CI must still be green for the current HEAD SHA.
 
 **Status labels mirror the review gate.** A PR carries `gauntlet-reviewing` until its current HEAD
-holds two SATISFIED verdicts for the same live PR content, then `gauntlet-accepted`. Because any
+holds two **admissible** SATISFIED verdicts for the same live PR content with `ci == green|none` and
+Copilot clear (`verdict_admissible` + the accept predicate above), then `gauntlet-accepted`. Because any
 PR-content change resets the gate, if an accepted PR's content later changes — a CI fix,
 conflict-resolving rebase, formatter/bot commit, etc. — swap the label back
 (`--remove-label gauntlet-accepted --add-label gauntlet-reviewing`). A clean base-only rebase with
