@@ -425,7 +425,11 @@ PR_VIEW_JSON=""
 REVIEW_THREADS_JSON=""
 RAW_OUTPUT=""
 DEDUP_OUTPUT=""
-COPILOT_PATTERN='copilot|github-copilot|copilot-pull-request-reviewer'
+# Anchored so the alternation matches the WHOLE login, not a substring: an
+# unanchored pattern accepts an impostor like `not-a-copilot-user`. The optional
+# `[bot]` suffix covers the review author `copilot-pull-request-reviewer[bot]`;
+# the comment author is the bare `Copilot` (case-folded by test(...; "i") below).
+COPILOT_PATTERN='^(copilot|github-copilot|copilot-pull-request-reviewer)(\[bot\])?$'
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -561,6 +565,35 @@ jq -n \
           }
       ]
   ' >"$RAW_OUTPUT"
+
+# Catch a stale/wrong --copilot-pattern before it fails open. If unresolved review
+# threads carried comments but NONE matched, a wrong allowlist yields zero items —
+# indistinguishable from a genuinely clean PR (SKILL-001). Warn loudly on stderr,
+# naming the author logins that were actually seen and the pattern used, so a changed
+# Copilot login is visible instead of silent. This is NOT treated as an error: a PR
+# with only human comments legitimately matches nothing, so exit stays 0. A truly
+# empty PR (no unresolved comments at all) stays silent — nothing to warn about.
+MATCHED_COUNT=$(jq 'length' "$RAW_OUTPUT")
+UNRESOLVED_COMMENT_COUNT=$(jq '
+  [ .data.repository.pullRequest.reviewThreads.nodes[]
+    | select(.isResolved | not)
+    | (.comments.nodes // [])[]
+  ] | length
+' "$REVIEW_THREADS_JSON")
+
+if [[ "$MATCHED_COUNT" -eq 0 && "$UNRESOLVED_COMMENT_COUNT" -gt 0 ]]; then
+  AUTHORS_SEEN=$(jq -r '
+    [ .data.repository.pullRequest.reviewThreads.nodes[]
+      | select(.isResolved | not)
+      | (.comments.nodes // [])[]
+      | .author.login // "(null)"
+    ] | unique | join(", ")
+  ' "$REVIEW_THREADS_JSON")
+  printf "WARNING: 0 of %s review comments matched --copilot-pattern '%s'\n" \
+    "$UNRESOLVED_COMMENT_COUNT" "$COPILOT_PATTERN" >&2
+  printf 'WARNING: authors seen: %s\n' "$AUTHORS_SEEN" >&2
+  printf "WARNING: if Copilot's login has changed, pass --copilot-pattern to override\n" >&2
+fi
 
 python3 "$SCRIPT_DIR/dedup_review_items.py" "$RAW_OUTPUT" "$DEDUP_OUTPUT"
 
