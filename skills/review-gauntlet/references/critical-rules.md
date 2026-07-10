@@ -68,6 +68,10 @@
   its coverage first, and raise any omitted dimension or materially wrong unit via a
   `plan_amendment_request` event rather than silently reviewing only the listed units. Never rewrite
   the plan or self-grant units (Stage 2a).
+- A SATISFIED verdict carries one `RESIDUAL-RISK: <area> — <why>` line (the least-certain part of the
+  diff). It is calibration metadata, never a finding: it never withholds the gate, never enters the fix
+  loop, and is never fed into the corroborating review. Do not manufacture a concern to fill it; a real
+  defect found while identifying it is a normal finding → NOT SATISFIED (Stage 2a).
 - One decision at N sites is the most common root cause. Trigger the §2a-deep root-cause pass on the
   **first** "missing/wrong at site X" finding (its shape, not a round count), map the whole space with
   a dedicated **read-only mapper** subagent — never one that also fixes, which under-maps toward what

@@ -118,7 +118,12 @@ codex exec --sandbox workspace-write -c "sandbox_workspace_write.network_access=
    limit your review to the listed units, and do NOT rewrite the plan yourself. Then append progress \
    JSONL to $PROJECT/<rundir>/review-<pr>-<n>.progress.jsonl as each planned unit starts and finishes; \
    progress counts only when it references a planned unit and includes concrete evidence. \
-   List any issues with file:line and a concrete fix. End with exactly one line: \
+   List any issues with file:line and a concrete fix. If — and only if — your verdict is SATISFIED, \
+   output one line immediately above the verdict, in the form RESIDUAL-RISK: <area or file> — <why \
+   this was the hardest part to verify fully>, naming the part of the diff you checked with the LEAST \
+   certainty relative to the rest. It is a calibration signal, NOT a finding, and does not weaken your \
+   SATISFIED — do not manufacture a concern to fill it; if identifying it surfaces a real defect, list \
+   it with file:line and return NOT SATISFIED instead. End with exactly one line: \
    'VERDICT: SATISFIED' or 'VERDICT: NOT SATISFIED'."   # run in background
 ```
 
@@ -134,6 +139,18 @@ As each verdict lands, tally it for the SHA it ran on:
 
 Every pass reviews the whole `<base>...HEAD` diff (not just the last fix-delta), so accumulated fixes
 are always judged as one piece.
+
+**Residual-risk signal (SATISFIED only).** A SATISFIED verdict carries one
+`RESIDUAL-RISK: <area> — <why>` line naming the part of the diff the pass verified with the least
+certainty, relative to the rest. It is calibration metadata, never a finding and never a verdict
+input: a SATISFIED with a residual-risk line is a **full** SATISFIED, and the line NEVER withholds the
+gate, NEVER enters the fix loop, and is NEVER fed into the corroborating review (which stays
+context-isolated). It reflects the gauntlet's purpose — lower the odds a defect survives stochastic
+variation, not claim certainty — by making residual uncertainty explicit instead of hidden behind a
+binary verdict. Record it with the verdict and carry it into the final report, one line per accepted
+PR. Its only aggregate use: when **both** accepting passes on the same content name the same area, note
+that convergence in the report, and the orchestrator MAY add a plan unit covering it the next time the
+PR content changes and a fresh review round starts — but it never blocks the current gate.
 
 **Gate is two fresh, context-isolated SATISFIED verdicts on the same PR content.** The two passes are
 not statistically or epistemically independent observations — they judge the same diff under the same
