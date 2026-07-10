@@ -126,15 +126,18 @@ After merge, return to your worktree and start next iteration.
 Your context window is finite. Wasting it on upfront analysis of all tests leaves
 nothing for actual fixes. Follow these rules to maximize fixes per session:
 
-- **One test at a time.** Find the first failure, debug it, fix it, verify, commit, merge.
-  Then sync and move to the next. Do NOT analyze all assigned tests before fixing any.
+- **One failure at a time.** Find the next actionable failure (step 3 scan rules), debug it,
+  fix it, verify, commit, merge. Then sync and move to the next. Do NOT analyze all assigned
+  tests before fixing any.
 - **Commit early, commit often.** After each fix (even partial), commit and merge back
   to `$PARENT`. This preserves your work even if you run out of context later.
   Other agents (and future retry waves) benefit from your merged fixes immediately.
 - **Minimize reads.** Read only the specific functions/lines relevant to the current
   failure. Do not read entire files "for context" — use Grep to find the exact code.
-- **Skip test output you don't need.** After running tests, Grep for `--- FAIL:` to
-  find the first failure. Do not read the entire test output file.
+- **Skip test output you don't need.** Find the next actionable failure using step 3's scan
+  rules — Grep for `--- FAIL:`, then `FAIL\t`, then `panic:` / compile errors (a compile or
+  package-level failure may not print `--- FAIL:` at all); record blockers. Read only enough
+  surrounding output per candidate — never the entire test output file.
 - **Don't re-analyze blockers.** If a test requires a large feature that you cannot
   implement within a few focused edits, document it as blocked and move on immediately.
   Do not spend context exploring "how hard it would be."
