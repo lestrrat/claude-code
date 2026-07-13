@@ -33,7 +33,17 @@ Read linked doc BEFORE any work in that area. No exceptions.
 
 # Reporting
 
-- Final report: summary of work + worktree name (`.worktrees/<branch>`) or directory.
+## Interim updates (after tool batches, subagent returns, phase boundaries)
+
+- State what was learned / what changed in plain language, then next step. NEVER narrate mechanics ("grepping now") or use labels/numbering invented mid-task.
+- End EVERY interim update with either explicit user action item(s) or "Nothing needed from you."
+- No new info → no update.
+- Budget: 1–4 complete sentences. Full sentences, no fragments/arrow chains.
+
+## Final report
+
+- Summary of work + worktree name (`.worktrees/<branch>`) or directory.
+- Action items for user listed explicitly, or state none.
 
 # Code Reviews
 
