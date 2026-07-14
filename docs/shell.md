@@ -29,6 +29,25 @@ ALWAYS use dedicated tools. Bash is ONLY for commands with no tool equivalent.
 - Prefer dir flags or absolute paths over `cd`: `git -C <dir>`, `go -C <dir>`, `make -C <dir>`, absolute file arguments.
 - No flag/absolute-path option → `cd <dir>` as its own Bash call, then the command as a separate call. `cd` back afterward.
 
+## Killing Processes
+
+Other agents, other sessions, and the user share this machine. Name/pattern kills match their processes too.
+
+| Command | Rule |
+|---------|------|
+| `pkill`, `killall` | BANNED. No exceptions — a name pattern cannot tell your process from someone else's |
+| `kill $(pgrep …)`, `kill $(lsof -t -i:PORT)`, `kill $(jobs -p)` | BANNED. Same problem: the PID set is not yours |
+| `kill -9 -1`, `kill 0`, `kill -- -<pgid>` | BANNED. Kills whole sessions/groups |
+| `kill <PID>` | ONLY for a PID from a process YOU started in THIS session and whose PID you captured at launch |
+
+Background processes started via the Bash tool → stop with the harness background-task tool (`KillShell`/`TaskStop`), NEVER a shell kill.
+
+Port in use, stale server, hung process you did NOT start:
+
+- Do NOT kill it. It is very likely another agent's.
+- Pick a different port, or work around it.
+- Genuinely blocked → report to the user with the PID and command line, and let them decide.
+
 ## Output Storage
 
 Store output to `$PROJECT_DIR/.tmp/<tool>-<slug>.<ext>` first, then Read/Grep the file, when output is any of:
