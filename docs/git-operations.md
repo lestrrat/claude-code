@@ -1,21 +1,14 @@
 # Git Operations
 
-## Commit Messages
+## Commit & PR Messages
 
-- Single line only. No body, no blank line + description.
-- Max ~50 characters. Lowercase unless proper noun.
-- No Co-Authored-By, AI/agent attribution, or any mention of coding agents.
-- No trailing period.
-- Imperative mood: "fix X", "add Y", "update Z" — not "fixed", "adds", "updated".
+Message rules live in `~/.claude/scripts/git-lint-message`, NOT in this doc. MANDATORY workflow for every `git commit`, `gh pr create`, `gh pr edit`:
 
-## PR Messages
-
-- Title: same rules as commit messages above.
-- Body: terse bullet points only. No prose, no filler, no "this PR does X".
-- 1–3 bullets stating what changed. Each bullet ≤ 1 line.
-- No "Test plan" section. Ever.
-- No AI/agent attribution lines.
-- Omit sections with no content. Don't add empty headings.
+1. `~/.claude/scripts/git-lint-message rules <commit|pr-title|pr-body>` → draft to that spec.
+2. Write draft to `.tmp/` (`.tmp/commit-msg.txt`, `.tmp/pr-title.txt`, `.tmp/pr-body.md`).
+3. `~/.claude/scripts/git-lint-message <commit|pr-title|pr-body> <file>` → fix every ERROR, re-run until exit 0.
+4. Each WARN: fix, or confirm exemption genuinely applies (e.g. leading capital IS proper noun).
+5. Use linted file verbatim: `git commit -F .tmp/commit-msg.txt`, `gh pr create --title "$(cat .tmp/pr-title.txt)" --body-file .tmp/pr-body.md`.
 
 ## Branch Naming
 
