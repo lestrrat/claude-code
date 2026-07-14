@@ -39,6 +39,10 @@ Read linked doc BEFORE any work in that area. No exceptions.
 - End EVERY interim update with either explicit user action item(s) or "Nothing needed from you."
 - No new info → no update.
 - Budget: 1–4 complete sentences. Full sentences, no fragments/arrow chains.
+- One idea per sentence, ≤ ~20 words. NEVER semicolon-chain clauses or nest conditionals — split into separate sentences.
+- Anchor identifiers on first mention per update: `#30 (retention rules)`, not bare `#30`. Applies to PR/issue numbers, branches, agent names.
+- 2+ independent items → one short bullet per item, NOT packed prose. Sentence budget covers only the non-bullet portion.
+- No meta-commentary about own reporting ("because they're real risks, not mechanics"). Report the work only.
 
 ## Final report
 
