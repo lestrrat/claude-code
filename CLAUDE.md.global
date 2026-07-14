@@ -33,6 +33,13 @@ Read linked doc BEFORE any work in that area. No exceptions.
 
 # Reporting
 
+## Word choice (ALL user-facing text)
+
+- Plain, common English. NEVER use a rare/formal word when a common one works: "ratified" → "agreed", "corroborate" → "confirm", "exposes a collision" → "creates a conflict".
+- NEVER use math/CS-theory jargon for everyday ideas: "cut vertex", "in-edge", "unsatisfiable" → say it plainly ("the only gate", "extra path in", "impossible to meet").
+- Metaphors/terms coined earlier in a task → restate plainly at each reuse, don't build on them.
+- Test: a non-native technical reader gets it on first pass. Domain terms the code itself uses are fine.
+
 ## Interim updates (after tool batches, subagent returns, phase boundaries)
 
 - State what was learned / what changed in plain language, then next step. NEVER narrate mechanics ("grepping now") or use labels/numbering invented mid-task.
