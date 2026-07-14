@@ -1,0 +1,209 @@
+#!/bin/bash
+# git-lint-message — single source of truth for commit-message / PR-message
+# rules. Prints the rules for drafting, lints a draft against them.
+#
+# Usage: git-lint-message rules <commit|pr-title|pr-body>   # print rule set
+#        git-lint-message <commit|pr-title|pr-body> <file>  # lint a draft
+#
+# Lint output: one finding per line, "ERROR: ..." or "WARN: ...". Prints "ok"
+# when nothing is found. ERRORs are rule violations and must be fixed. WARNs
+# need judgment (e.g. a leading capital that may be a proper noun).
+#
+# Exit codes:
+#   0  — clean, or WARNs only
+#   1  — one or more ERRORs
+#   2  — usage error
+set -euo pipefail
+
+usage() {
+  echo "Usage: git-lint-message rules <commit|pr-title|pr-body>" >&2
+  echo "       git-lint-message <commit|pr-title|pr-body> <file>" >&2
+  exit 2
+}
+
+print_rules() {
+  case "$1" in
+    commit|pr-title)
+      cat <<'EOF'
+- single line only — no body, no blank line + description
+- max ~50 chars
+- lowercase unless proper noun
+- imperative mood: "fix X", "add Y", "update Z" — not "fixed", "adds", "updated"
+- no trailing period
+- no Co-Authored-By, AI/agent attribution, or any mention of coding agents
+EOF
+      ;;
+    pr-body)
+      cat <<'EOF'
+- terse bullet points only — no prose, no filler, no "this PR does X", no code blocks
+- 1–3 bullets stating what changed, each ≤ 1 line
+- no "Test plan" section, ever
+- no AI/agent attribution lines
+- headings allowed, but omit sections with no content — no empty headings
+EOF
+      ;;
+    *) usage ;;
+  esac
+}
+
+[ $# -eq 2 ] || usage
+
+if [ "$1" = "rules" ]; then
+  print_rules "$2"
+  exit 0
+fi
+
+MODE="$1"
+FILE="$2"
+
+if [ ! -f "$FILE" ]; then
+  echo "error: no such file: $FILE" >&2
+  exit 2
+fi
+
+errors=0
+warns=0
+
+error() { echo "ERROR: $1"; errors=$((errors + 1)); }
+warn()  { echo "WARN: $1";  warns=$((warns + 1)); }
+
+# Shared: attribution / agent-mention checks on a single line.
+# Hard attribution markers are always errors; a bare agent name is a warn
+# because it can be legitimate subject matter (e.g. in a dotfiles repo).
+check_attribution() {
+  local line="$1" where="$2"
+  if grep -qiE 'co-authored-by|generated with|🤖' <<< "$line"; then
+    error "$where: attribution line: \"$line\""
+  elif grep -qiE '\b(claude|anthropic|codex|copilot|chatgpt|an ai|ai-generated)\b' <<< "$line"; then
+    warn "$where: mentions an AI agent — legitimate subject matter, or attribution? \"$line\""
+  fi
+}
+
+lint_subject() {
+  local label="$1"
+  local nlines
+  nlines=$(grep -c '' "$FILE" || true)
+
+  local subject
+  subject=$(head -n 1 "$FILE")
+
+  if [ "$nlines" -gt 1 ] && [ -n "$(tail -n +2 "$FILE" | tr -d '[:space:]')" ]; then
+    error "$label must be a single line — no body, no blank line + description"
+  fi
+
+  if [ -z "$subject" ]; then
+    error "$label is empty"
+    return
+  fi
+
+  local len=${#subject}
+  if [ "$len" -gt 60 ]; then
+    error "$label is $len chars — max ~50"
+  elif [ "$len" -gt 50 ]; then
+    warn "$label is $len chars — max ~50, trim if possible"
+  fi
+
+  case "$subject" in
+    [A-Z]*) warn "$label starts with a capital — lowercase unless proper noun: \"$subject\"" ;;
+  esac
+
+  case "$subject" in
+    *.) error "$label has a trailing period" ;;
+  esac
+
+  local first_word
+  first_word=$(awk '{print tolower($1)}' <<< "$subject")
+  case "$first_word" in
+    added|fixed|updated|removed|changed|created|implemented|improved|refactored|renamed|moved|deleted| \
+    adds|fixes|updates|removes|changes|creates|implements|improves|refactors|renames|moves|deletes| \
+    adding|fixing|updating|removing|changing|creating|implementing|improving|refactoring|renaming|moving|deleting)
+      error "$label not imperative mood — use \"fix X\", \"add Y\", not \"$first_word\"" ;;
+  esac
+
+  # Attribution can hide anywhere (e.g. a Co-Authored-By trailer below the
+  # subject), so scan every line, not just the subject.
+  local n=0 line
+  while IFS= read -r line || [ -n "$line" ]; do
+    n=$((n + 1))
+    [ -n "$line" ] || continue
+    check_attribution "$line" "$label line $n"
+  done < "$FILE"
+}
+
+lint_pr_body() {
+  local lineno=0 bullets=0 in_fence=0
+  local heading_open="" heading_line=0
+
+  while IFS= read -r line || [ -n "$line" ]; do
+    lineno=$((lineno + 1))
+
+    if [[ "$line" =~ ^\`\`\` ]]; then
+      if [ "$in_fence" -eq 0 ]; then
+        error "line $lineno: code block — body is terse bullet points only"
+      fi
+      in_fence=$((1 - in_fence))
+      continue
+    fi
+    [ "$in_fence" -eq 1 ] && continue
+
+    # blank line
+    if [ -z "${line//[[:space:]]/}" ]; then
+      continue
+    fi
+
+    if grep -qiE '(^|[^a-z])test ?plan' <<< "$line"; then
+      error "line $lineno: \"Test plan\" section — never include one"
+    fi
+    check_attribution "$line" "line $lineno"
+
+    # heading
+    if [[ "$line" =~ ^#{1,6}[[:space:]] ]]; then
+      if [ -n "$heading_open" ]; then
+        error "line $heading_line: empty heading \"$heading_open\" — omit sections with no content"
+      fi
+      heading_open="$line"
+      heading_line="$lineno"
+      continue
+    fi
+
+    heading_open=""
+
+    # bullet (allow nesting and numbered items)
+    if [[ "$line" =~ ^[[:space:]]*([-*]|[0-9]+\.)[[:space:]] ]]; then
+      bullets=$((bullets + 1))
+      if [ ${#line} -gt 120 ]; then
+        error "line $lineno: bullet is ${#line} chars — each bullet ≤ 1 line"
+      fi
+      continue
+    fi
+
+    error "line $lineno: prose line — body is terse bullet points only: \"$line\""
+  done < "$FILE"
+
+  if [ -n "$heading_open" ]; then
+    error "line $heading_line: empty heading \"$heading_open\" — omit sections with no content"
+  fi
+
+  if [ "$bullets" -eq 0 ]; then
+    error "no bullets — body must be 1–3 bullets stating what changed"
+  elif [ "$bullets" -gt 3 ]; then
+    warn "$bullets bullets — target is 1–3, trim unless every one earns its place"
+  fi
+}
+
+case "$MODE" in
+  commit)   lint_subject "commit message" ;;
+  pr-title) lint_subject "PR title" ;;
+  pr-body)  lint_pr_body ;;
+  *)
+    echo "error: unknown mode: $MODE (expected commit, pr-title, or pr-body)" >&2
+    exit 2
+    ;;
+esac
+
+if [ "$errors" -eq 0 ] && [ "$warns" -eq 0 ]; then
+  echo "ok"
+fi
+
+[ "$errors" -eq 0 ] || exit 1
+exit 0
