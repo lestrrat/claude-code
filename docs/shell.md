@@ -8,7 +8,6 @@ Prefer one command per Bash call. `&&`/`||`/`;` chaining and multi-line commands
 |--------|------|
 | `\|` (pipe) | OK for cheap local one-shot transforms (e.g. `go list ./... \| wc -l`). Expensive/large output → store to `.tmp/` first (see Output Storage below) |
 | `$(...)` backticks | OK for trivial values (e.g. `$(git rev-parse --show-toplevel)`). Intermediate result matters or should inform later commands → separate Bash call |
-| `>` `>>` | ONLY for writing to `.tmp/` files. Creating/editing real files → Write/Edit tool |
 | `<` | Avoid. Use Write tool or file arguments instead |
 | `for` `while` `until` `if/then` `case` | Banned. Use multiple parallel tool calls — per-item failures stay visible |
 
