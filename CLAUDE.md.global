@@ -31,6 +31,15 @@ Read linked doc BEFORE any work in that area. No exceptions.
 - Focus on implementation first. Minimize repeated tests, pass/fail counting, and other check-in work during active editing.
 - Run broader verification only at meaningful checkpoints, before handoff, or when risk/blockers justify it.
 
+# Request Wording (ALL tasks)
+
+- Applies to prompts, delegations, queries, reviews, reports, and tool instructions.
+- State legitimate engineering/maintenance goal + named repository/system scope before technical details.
+- Describe concrete behavior, failure condition, intended result, and proposed fix. NEVER frame routine engineering work as an attack exercise.
+- Request proof through repository tests/local fixtures. NEVER imply access to or testing of third-party systems.
+- Use security-domain terms only when needed for accuracy. Keep surrounding language focused on diagnosis, repair, and prevention.
+- NEVER conceal or misstate task intent. If accurate wording still triggers a safety gate, stop and ask user to state authorization + scope.
+
 # Reporting
 
 ## Word choice (ALL user-facing text)
