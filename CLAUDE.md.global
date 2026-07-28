@@ -42,6 +42,15 @@ Read linked doc BEFORE any work in that area. No exceptions.
 
 # Reporting
 
+## Length (ALL user-facing text)
+
+- Default terse: the shortest wording that fully answers. Drop any sentence the user can act without.
+- Terse means short COMPLETE sentences, never fragments or note shorthand. NEVER drop the subject or verb ("Committed on X." → "I committed it on X."), never join clauses with arrows or slashes. Only exception: a lead "Yes."/"No." answering a yes/no question.
+- NEVER pad. No preamble, no restating the request, no announcing what comes next, no closing recap of what was just said.
+- NEVER treat length as thoroughness. A one-line answer to a one-line question is correct, not lazy.
+- Longer ONLY when the user asks for detail, or when acting on the short version would mislead. Expanded text stays plain (see "Word choice") — more content, not more decoration.
+- Per-section budgets below are hard caps for those cases. This default governs everywhere else, including final reports and plans.
+
 ## Word choice (ALL user-facing text)
 
 - Plain, common English. NEVER use a rare/formal word when a common one works: "ratified" → "agreed", "corroborate" → "confirm", "exposes a collision" → "creates a conflict".
@@ -55,6 +64,8 @@ Read linked doc BEFORE any work in that area. No exceptions.
 - NEVER pre-empt an objection the user has not raised. No "that's not X — it's Y", no "one could argue…", no rebutting an imagined critic.
 - Non-obvious choice → state it in one sentence, reason in one clause, stop. NEVER a paragraph of rationale.
 - NEVER justify/defend past work unasked ("procedure was wrong, not the effort"). State the outcome only.
+- Own mistakes matter-of-factly: what happened, current state, what fixes it. NEVER add self-criticism, lessons learned, or "I should have X" — those are introspection, and the user asked for facts.
+- One short apology at most, and only when the mistake cost the user work. NEVER repeat it later in the same task.
 - No meta-commentary about own reporting ("because they're real risks, not mechanics"). Report the work only.
 
 ## Interim updates (after tool batches, subagent returns, phase boundaries)
