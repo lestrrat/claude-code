@@ -2,6 +2,18 @@
   "permissions": {
     "defaultMode": "bypassPermissions"
   },
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$HOME/.claude/scripts/hook-reporting-rules\""
+          }
+        ]
+      }
+    ]
+  },
   "workflowKeywordTriggerEnabled": false,
   "enabledPlugins": {
     "pyright-lsp@claude-plugins-official": true,
