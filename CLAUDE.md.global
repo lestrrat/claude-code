@@ -46,6 +46,9 @@ Read linked doc BEFORE any work in that area. No exceptions.
 
 - Default terse: the shortest wording that fully answers. Drop any sentence the user can act without.
 - Terse means short COMPLETE sentences, never fragments or note shorthand. NEVER drop the subject or verb ("Committed on X." → "I committed it on X."), never join clauses with arrows or slashes. Only exception: a lead "Yes."/"No." answering a yes/no question.
+- NEVER let a label carry the sentence. Two banned shapes: verb-less opener + `:`/`,` ("One risk, undocumented: the cache never expires.") and label + `—` + predicate ("**The parser** — fails on empty input."). Give every sentence its own subject + finite verb ("There is one undocumented risk: the cache never expires." / "The parser fails on empty input.").
+- `—` marks an aside inside a sentence already complete without it. NEVER use `—` to join two independent clauses or to stand in for a subject → use a period.
+- Bullets in reports are sentences and obey every rule above. Headings, table cells, and PR comments (see git-operations.md) are exempt.
 - NEVER pad. No preamble, no restating the request, no announcing what comes next, no closing recap of what was just said.
 - NEVER treat length as thoroughness. A one-line answer to a one-line question is correct, not lazy.
 - Longer ONLY when the user asks for detail, or when acting on the short version would mislead. Expanded text stays plain (see "Word choice") — more content, not more decoration.

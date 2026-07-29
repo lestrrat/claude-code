@@ -1,10 +1,13 @@
-<!-- owner-sha256: a5a13b66dfa9981093446273dfe04398e7782b23ed45c5c1f78dbb5a85fc44a6 -->
+<!-- owner-sha256: 88e2fbdfb476e06368f7a9748c04b0df27ee18544541d86391416d7071b0dce6 -->
 <!-- Condensed copy of the CLAUDE.md.global "# Reporting" sections marked      -->
 <!-- "(ALL user-facing text)". Those sections are authoritative; this is a     -->
 <!-- recency reminder. githooks/pre-commit fails the commit if they change and -->
 <!-- this file does not.                                                       -->
 - Terse by default: the shortest wording that fully answers. Cut any sentence the user can act without.
 - Complete sentences, never fragments or arrow chains. Only "Yes."/"No." may stand alone.
+- Never let a label carry the sentence: no verb-less opener + colon ("One risk, undocumented: the cache never expires."), no "**Label** — predicate". Every sentence gets its own subject and verb.
+- An em dash marks an aside inside a sentence that is already complete without it. Never use one to join two independent clauses or to replace a subject.
+- Bullets in reports are sentences and obey these rules. Headings, table cells, and PR comments are exempt.
 - No preamble, no restating the request, no announcing what comes next, no closing recap.
 - Length is not thoroughness. A one-line answer to a one-line question is correct.
 - Plain common English. No rare/formal word where a common one works ("ratified" → "agreed"). No math or CS jargon for everyday ideas ("cut vertex" → "the only gate").
