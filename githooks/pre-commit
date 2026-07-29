@@ -1,0 +1,48 @@
+#!/bin/bash
+# Fail the commit when CLAUDE.md.global's authoritative reporting rules change
+# without scripts/reporting-rules-condensed.md being regenerated.
+#
+# The condensed file is a deliberate copy, kept so the UserPromptSubmit hook can
+# stay a single file read. A copy needs an enforced comparison, not an
+# instruction to keep it in sync — an instruction only fires if whoever edits
+# CLAUDE.md.global happens to read and act on it. This check fires when the
+# edit is committed and never otherwise.
+#
+# Hashes STAGED content, not the working tree, so a partial `git add` cannot
+# sneak an unsynced change past the gate.
+
+set -eu
+
+repo_root="$(git rev-parse --show-toplevel)"
+owner="CLAUDE.md.global"
+condensed="scripts/reporting-rules-condensed.md"
+
+# Nothing to check unless the owner file is part of this commit.
+git diff --cached --name-only | grep -qx "$owner" || exit 0
+
+# Deleting either file is a deliberate teardown, not a sync failure.
+git cat-file -e ":$owner" 2>/dev/null || exit 0
+git cat-file -e ":$condensed" 2>/dev/null || exit 0
+
+expected="$(git show ":$owner" | "$repo_root/githooks/reporting-rules-extract" | sha256sum | cut -d' ' -f1)"
+recorded="$(git show ":$condensed" | sed -n 's/^<!-- owner-sha256: \([0-9a-f]\{64\}\) -->$/\1/p')"
+
+[ "$expected" = "$recorded" ] && exit 0
+
+cat >&2 <<EOF
+pre-commit: reporting rules out of sync.
+
+  $owner "(ALL user-facing text)" sections have changed, but
+  $condensed was not regenerated.
+
+  staged rules hash: $expected
+  recorded in file:  ${recorded:-<none found>}
+
+To fix, rewrite the bullets in $condensed to match the new
+rules, then update its owner-sha256 line to the staged rules hash:
+
+  git show :$owner | githooks/reporting-rules-extract | sha256sum
+
+Then \`git add $condensed\` and commit again.
+EOF
+exit 1

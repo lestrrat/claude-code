@@ -1,0 +1,30 @@
+#!/bin/bash
+# UserPromptSubmit hook: re-inject the condensed reporting rules near the
+# generation point, where attention is highest.
+#
+# CLAUDE.md is already in context from turn one, so a "re-read section X"
+# instruction adds nothing. What decays over a long session is attention, not
+# availability — those rules sit thousands of tokens back by turn 30. This hook
+# prints them fresh each turn.
+#
+# Deliberately does no checking, hashing, or extraction: it runs on every
+# prompt, so it stays a single file read. Keeping the condensed copy in sync
+# with CLAUDE.md.global is githooks/pre-commit's job, and that fires only when
+# CLAUDE.md.global is actually committed.
+#
+# Silent no-op (exit 0, no output) if the condensed file is missing: a broken
+# reminder must never block a prompt.
+
+set -eu
+
+# Resolve alongside this script so it works from the repo or from the
+# ~/.claude/scripts/ symlink, whatever directory setup.sh installed into.
+rules_file="$(dirname "$(readlink -f "$0")")/reporting-rules-condensed.md"
+
+[ -r "$rules_file" ] || exit 0
+
+printf '<reporting-rules-reminder>\n'
+printf 'These rules govern the text you are about to write. CLAUDE.md is\n'
+printf 'authoritative; this is a recency reminder, not a second source of truth.\n\n'
+grep -v '^<!--' "$rules_file"
+printf '</reporting-rules-reminder>\n'

@@ -1,0 +1,25 @@
+#!/bin/bash
+# Print the `# Reporting` subsections of CLAUDE.md.global that are marked
+# "(ALL user-facing text)". Reads the file on stdin, writes the sections to
+# stdout.
+#
+# Repo tooling, not an agent script: it exists so `githooks/pre-commit` can hash
+# the authoritative rules and compare that hash against the one recorded in
+# scripts/reporting-rules-condensed.md. Selection is by marker, not by heading
+# name, so tagging a new section pulls it into the sync check automatically.
+
+set -eu
+
+awk '
+  # Top-level headings delimit the Reporting section.
+  /^# / {
+    in_reporting = ($0 == "# Reporting")
+    in_block = 0
+    next
+  }
+  !in_reporting { next }
+  /^## / {
+    in_block = (index($0, "(ALL user-facing text)") > 0)
+  }
+  in_block { print }
+'
