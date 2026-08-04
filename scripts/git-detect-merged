@@ -1,0 +1,260 @@
+#!/bin/bash
+# git-detect-merged — list local branches whose changes are already in a target
+# branch, with the active-work status that decides whether they are safe to delete.
+#
+# Usage: git-detect-merged [target-branch] [trunk-branch]
+#
+#   target-branch  branch to check against. Default: main.
+#   trunk-branch   branch used to scope candidates when target != trunk (see
+#                  "Scope pre-filter" below). Default: main.
+#
+# Output (stdout): `#`-prefixed metadata lines, then a TSV table with a header row.
+# Columns: branch, merge, status, worktree, reason.
+#   merge    — regular | squash
+#   status   — clean | dirty | checked-out | unknown
+#   worktree — absolute path, or `-` when the branch has no worktree
+#   reason   — why status is not clean, or `-` when it is
+# Only merged branches get a row. Unmerged and out-of-scope branches are counted
+# in the metadata lines, never silently dropped.
+#
+# Exit codes:
+#   0  — table produced (possibly with zero rows)
+#   1  — runtime error, no table produced
+#   2  — usage error
+#
+# SAFETY: this script only reads. It never deletes a branch or a worktree. Its
+# verdicts drive deletion in the `git-cleanup-merged` skill, so it FAILS CLOSED
+# in both directions: a branch is reported merged only when proven merged, and
+# `clean` is emitted only when the working state is proven quiet. Any error or
+# ambiguity resolves to "not merged" (omitted) or `unknown` (never cleanable).
+set -euo pipefail
+
+usage() {
+  echo "Usage: git-detect-merged [target-branch] [trunk-branch]"
+}
+
+case "${1:-}" in
+  -h|--help) usage; exit 0 ;;
+esac
+
+if [ $# -gt 2 ]; then
+  usage >&2
+  exit 2
+fi
+
+TARGET="${1:-main}"
+TRUNK="${2:-main}"
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SQUASH_CHECK="$SCRIPT_DIR/git-is-squash-merged"
+if [ ! -x "$SQUASH_CHECK" ]; then
+  echo "error: required sibling script not found or not executable: $SQUASH_CHECK" >&2
+  exit 1
+fi
+
+git rev-parse --git-dir >/dev/null 2>&1 || {
+  echo "error: not inside a git repository" >&2
+  exit 1
+}
+
+git rev-parse --verify --quiet "refs/heads/$TARGET" >/dev/null || {
+  echo "error: target branch '$TARGET' not found" >&2
+  exit 1
+}
+
+# Scope pre-filter. When target != trunk, only branches that forked from the
+# target's OWN commits are candidates. A branch forked before the target diverged
+# from trunk is unrelated work that merely shares ancestry, and deleting it during
+# a target-scoped cleanup would destroy someone else's branch.
+PREFILTER=false
+TARGET_FORK=""
+if [ "$TARGET" != "$TRUNK" ]; then
+  git rev-parse --verify --quiet "refs/heads/$TRUNK" >/dev/null || {
+    echo "error: trunk branch '$TRUNK' not found; pass it explicitly as the second argument" >&2
+    exit 1
+  }
+  TARGET_FORK=$(git merge-base "$TRUNK" "$TARGET") || {
+    echo "error: cannot find merge-base for '$TRUNK' and '$TARGET'" >&2
+    exit 1
+  }
+  PREFILTER=true
+fi
+
+# contains_line — is $2 present as a whole line in the newline-delimited table $1?
+contains_line() {
+  local table="$1" needle="$2" line
+  while IFS= read -r line; do
+    [ "$line" = "$needle" ] && return 0
+  done <<< "$table"
+  return 1
+}
+
+# Worktree table: one `<branch>\t<path>\t<prunable 0|1>` line per worktree that has
+# a branch checked out. Detached and bare entries carry no branch and are skipped.
+# MAIN_WT is the main working tree, i.e. the first entry git reports.
+WT_TABLE=""
+MAIN_WT=""
+wt_path=""
+wt_branch=""
+wt_prunable=0
+
+flush_wt() {
+  [ -n "$wt_path" ] || return 0
+  [ -n "$MAIN_WT" ] || MAIN_WT="$wt_path"
+  if [ -n "$wt_branch" ]; then
+    WT_TABLE="${WT_TABLE}${wt_branch}"$'\t'"${wt_path}"$'\t'"${wt_prunable}"$'\n'
+  fi
+  wt_path=""
+  wt_branch=""
+  wt_prunable=0
+}
+
+while IFS= read -r line; do
+  case "$line" in
+    "worktree "*)  flush_wt; wt_path="${line#worktree }" ;;
+    "branch refs/heads/"*) wt_branch="${line#branch refs/heads/}" ;;
+    "prunable"*)   wt_prunable=1 ;;
+  esac
+done < <(git worktree list --porcelain)
+flush_wt
+
+# wt_lookup — print `<path>\t<prunable>` for branch $1, or return 1 if it has no
+# worktree. The branch name is matched as a literal, never as a glob.
+wt_lookup() {
+  local needle="$1" line
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    case "$line" in
+      "$needle"$'\t'*) printf '%s' "${line#*$'\t'}"; return 0 ;;
+    esac
+  done <<< "$WT_TABLE"
+  return 1
+}
+
+# classify — set CLASS_STATUS and CLASS_REASON for branch $1. A branch with no
+# worktree has nothing to be dirty about and is clean. Everything the script
+# cannot positively verify becomes `unknown`, which the cleanup skill never deletes.
+CLASS_STATUS=""
+CLASS_REASON=""
+classify() {
+  local branch="$1" info path prunable expected out line untracked_path
+  local has_tracked=0 has_untracked=0
+
+  if ! info=$(wt_lookup "$branch"); then
+    CLASS_STATUS="clean"; CLASS_REASON="-"; return 0
+  fi
+  path="${info%%$'\t'*}"
+  prunable="${info##*$'\t'}"
+
+  if [ "$path" = "$MAIN_WT" ]; then
+    CLASS_STATUS="checked-out"; CLASS_REASON="main-worktree"; return 0
+  fi
+  if [ "$prunable" = "1" ]; then
+    CLASS_STATUS="unknown"; CLASS_REASON="worktree-prunable"; return 0
+  fi
+  if [ ! -d "$path" ]; then
+    CLASS_STATUS="unknown"; CLASS_REASON="worktree-missing"; return 0
+  fi
+
+  # The repo convention fixes a worktree's directory name to its branch name. A
+  # worktree somewhere else is not a path this tooling may remove unattended.
+  expected="$MAIN_WT/.worktrees/$branch"
+  if [ "$path" != "$expected" ]; then
+    CLASS_STATUS="unknown"; CLASS_REASON="worktree-path-mismatch"; return 0
+  fi
+
+  if ! out=$(git -C "$path" status --porcelain 2>/dev/null); then
+    CLASS_STATUS="unknown"; CLASS_REASON="status-failed"; return 0
+  fi
+
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    case "$line" in
+      '?? '*)
+        # Untracked `.tmp/` content is this tooling's own scratch output, not work.
+        untracked_path="${line#?? }"
+        untracked_path="${untracked_path#\"}"
+        untracked_path="${untracked_path%\"}"
+        case "$untracked_path" in
+          .tmp|.tmp/*) ;;
+          *) has_untracked=1 ;;
+        esac
+        ;;
+      *) has_tracked=1 ;;
+    esac
+  done <<< "$out"
+
+  if [ "$has_tracked" = "1" ]; then
+    CLASS_STATUS="dirty"; CLASS_REASON="uncommitted-changes"; return 0
+  fi
+  if [ "$has_untracked" = "1" ]; then
+    CLASS_STATUS="dirty"; CLASS_REASON="untracked-files"; return 0
+  fi
+  CLASS_STATUS="clean"; CLASS_REASON="-"
+}
+
+MERGED_REGULAR=$(git branch --merged "$TARGET" --format='%(refname:short)')
+ALL_BRANCHES=$(git branch --format='%(refname:short)')
+
+n_candidates=0
+n_merged=0
+n_unmerged=0
+n_out_of_scope=0
+ROWS=""
+
+while IFS= read -r branch; do
+  [ -n "$branch" ] || continue
+  # NEVER consider the target or the trunk. Both are deletion targets otherwise.
+  [ "$branch" = "$TARGET" ] && continue
+  [ "$branch" = "$TRUNK" ] && continue
+
+  if [ "$PREFILTER" = true ]; then
+    if ! branch_base=$(git merge-base "$TARGET" "$branch" 2>/dev/null); then
+      n_out_of_scope=$((n_out_of_scope + 1))
+      continue
+    fi
+    # Forked at or before the target's own fork point → shared history with the
+    # trunk, not target-scoped work.
+    if git merge-base --is-ancestor "$branch_base" "$TARGET_FORK" 2>/dev/null; then
+      n_out_of_scope=$((n_out_of_scope + 1))
+      continue
+    fi
+  fi
+
+  n_candidates=$((n_candidates + 1))
+
+  merge_type=""
+  if contains_line "$MERGED_REGULAR" "$branch"; then
+    merge_type="regular"
+  else
+    squash_rc=0
+    squash_out=$("$SQUASH_CHECK" "$TARGET" "$branch" 2>&1) || squash_rc=$?
+    if [ "$squash_rc" = "0" ]; then
+      merge_type="squash"
+    else
+      # Exit 2 means the check itself failed. Report it so a broken check is not
+      # mistaken for a clean "not merged", but keep the fail-closed verdict.
+      if [ "$squash_rc" != "1" ]; then
+        echo "warning: squash check failed for '$branch': $squash_out" >&2
+      fi
+      n_unmerged=$((n_unmerged + 1))
+      continue
+    fi
+  fi
+
+  classify "$branch"
+
+  wt_col="-"
+  if info=$(wt_lookup "$branch"); then
+    wt_col="${info%%$'\t'*}"
+  fi
+
+  n_merged=$((n_merged + 1))
+  ROWS="${ROWS}${branch}"$'\t'"${merge_type}"$'\t'"${CLASS_STATUS}"$'\t'"${wt_col}"$'\t'"${CLASS_REASON}"$'\n'
+done <<< "$ALL_BRANCHES"
+
+echo "# target: $TARGET"
+echo "# trunk: $TRUNK"
+echo "# candidates: $n_candidates  merged: $n_merged  unmerged: $n_unmerged  out-of-scope: $n_out_of_scope"
+printf 'branch\tmerge\tstatus\tworktree\treason\n'
+printf '%s' "$ROWS"

@@ -9,57 +9,52 @@ Detect whether local branches and worktrees have their changes already merged in
 
 ## Args
 
-`/git-detect-merged [target-branch]`
+`/git-detect-merged [target-branch] [trunk-branch]`
 
 - `target-branch` — branch to check against. Default: `main`.
+- `trunk-branch` — branch the scope pre-filter measures against when it differs from the target. Default: `main`. Pass it ONLY in repos whose trunk is not `main` (e.g. `master`).
 
-Refer to the target branch as `$TARGET` below.
+## Run the detector
 
-## Pre-filter: scope to branches forked from $TARGET
+`~/.claude/scripts/git-detect-merged [target-branch] [trunk-branch]`
 
-When `$TARGET` is not `main`, only consider branches that forked from `$TARGET`'s own commits — not from shared ancestry with `main`. This prevents deleting unrelated branches (e.g. branches off `bar` when cleaning up `foo`).
+The script performs the entire detection: candidate selection, scope pre-filter, regular- and squash-merge classification, and active-work status. NEVER re-derive any part of it by hand. The fail-closed logic lives in the script, and a hand-run `git branch --merged` misses squash merges and ignores the scope pre-filter.
 
-1. Compute `target_fork = git merge-base main $TARGET`.
-2. For each candidate branch `B`, compute `branch_base = git merge-base $TARGET B`.
-3. Check: `git merge-base --is-ancestor $branch_base $target_fork`.
-   - If **yes** → `B` forked from shared history (before `$TARGET` diverged from `main`). **Skip it.**
-   - If **no** → `B` forked from `$TARGET`'s own commits. **Keep it.**
-
-Always exclude `main` and `$TARGET` from candidates.
-
-When `$TARGET` is `main`, skip this pre-filter — all branches are in scope.
-
-## Step A: Regular merge detection
-
-Run `git branch --merged $TARGET`. From the results, apply the pre-filter above and exclude `$TARGET` and `main`.
-
-## Step B: Squash merge detection
-
-Branches NOT listed by `--merged` may still have been squash-merged. For each remaining local branch that passes the pre-filter, run:
-
-```
-~/.claude/scripts/git-is-squash-merged $TARGET <branch>
-```
-
-- Exit 0 → **squash-merged**. Mark as candidate.
-- Exit 1 → **not merged**. Skip it.
-
-The script handles both single-commit cherry checks and multi-commit combined patch-id detection internally.
-
-## Detecting active work
-
-A branch or worktree is considered "actively being worked on" if any of these are true:
-
-- The worktree has uncommitted changes (staged or unstaged): `cd` to the worktree path first, then run `git status --porcelain` — any output means dirty.
-- The worktree has untracked files outside `.tmp/`: visible in `--porcelain` output (lines starting with `??`). Ignore untracked `.tmp/` content.
-- The branch is currently checked out in any worktree (including the main working tree).
+Exit codes: `0` → table produced, `1` → runtime error, `2` → usage error. Non-zero → report the error and STOP.
 
 ## Output
 
-Report each branch with:
+Three `#` metadata lines, then a TSV table with a header row:
 
-- Branch name
-- Target branch checked against
-- Merge type: `regular` or `squash`
-- Active work status: `clean`, `dirty`, or `checked-out`
-- Associated worktree path (if any)
+```
+# target: main
+# trunk: main
+# candidates: 8  merged: 7  unmerged: 1  out-of-scope: 0
+branch	merge	status	worktree	reason
+wt-clean	regular	clean	/repo/.worktrees/wt-clean	-
+wt-dirty	regular	dirty	/repo/.worktrees/wt-dirty	uncommitted-changes
+```
+
+Only merged branches get a row. The `unmerged` and `out-of-scope` counts cover every branch the script examined and excluded, so an excluded branch is visible rather than absent.
+
+| Column | Values |
+|--------|--------|
+| `branch` | Branch name |
+| `merge` | `regular` or `squash` |
+| `status` | `clean`, `dirty`, `checked-out`, `unknown` |
+| `worktree` | Absolute path, or `-` when the branch has no worktree |
+| `reason` | Why the status is not clean, or `-` when it is |
+
+`clean` is the ONLY status meaning "safe to delete". The other three each block deletion:
+
+| Status | Meaning |
+|--------|---------|
+| `dirty` | Worktree has uncommitted changes, or untracked files outside `.tmp/` |
+| `checked-out` | Branch occupies the main working tree |
+| `unknown` | State unverifiable — worktree prunable, missing, at a path other than `<repo>/.worktrees/<branch>`, or its status command failed |
+
+A branch checked out in its OWN `<repo>/.worktrees/<branch>` is not active work — that is the expected layout, and `git-cleanup-merged` removes the worktree before deleting the branch.
+
+## Report
+
+Present the table to the user. State the target branch, plus the `unmerged` and `out-of-scope` counts.
