@@ -9,9 +9,10 @@ Clean up local branches and worktrees whose changes have already been merged int
 
 ## Args
 
-`/git-cleanup-merged [target-branch]`
+`/git-cleanup-merged [target-branch] [trunk-branch]`
 
 - `target-branch` — branch to check against. Default: `main`.
+- `trunk-branch` — passed straight through to detection. Default: `main`.
 
 Refer to the target branch as `$TARGET` below.
 
@@ -19,29 +20,26 @@ Refer to the target branch as `$TARGET` below.
 
 ### 1. Detect merged branches
 
-Use the `git-detect-merged` skill with `$TARGET` to identify all merged branches, their merge type, active work status, and associated worktrees.
+Use the `git-detect-merged` skill with the same args. It returns the TSV table that drives every later step — branch, merge type, status, worktree path, reason.
 
-- Treat untracked files under `.tmp/` as ignorable temp output, not active work.
+Detection exited non-zero → report the error and STOP. NEVER fall back to a hand-run `git branch --merged`.
 
 ### 2. Build cleanup candidates
 
-From the detection results:
-
-- Include branches that are merged AND have no active work (status: `clean`).
-- Include worktrees whose branch is merged AND clean.
-- Exclude `$TARGET` and `main` — NEVER delete either.
-- Exclude branches with active work (dirty or checked-out), even if merged.
-- If `.tmp/` is the only untracked content, still treat worktree as clean.
+- Include a row if and only if its `status` is exactly `clean`.
+- Every other row is skipped, carrying its `reason` verbatim into the summary.
+- NEVER widen this rule. `dirty`, `checked-out`, and `unknown` all mean detection could not prove the branch is safe to delete, and `unknown` in particular means it could not read the state at all.
 
 ### 3. Present summary
 
 Show the user a single summary listing:
 
-- **Worktrees to remove** (path + branch)
-- **Branches to delete** (name + merge type: regular/squash). Mark squash-merged branches as requiring `-D` — `git branch -d` cannot see squash merges and always fails on them.
-- **Skipped** — merged branches/worktrees excluded due to active work, with the reason (e.g. "has uncommitted changes", "currently checked out")
+- **Worktrees to remove** (path + branch), for candidate rows whose `worktree` column is not `-`.
+- **Branches to delete** (name + merge type). Mark squash-merged branches as requiring `-D` — `git branch -d` cannot see squash merges and always fails on them.
+- **Skipped** — every non-`clean` row, with its `reason`.
+- **Not merged** — the `unmerged` and `out-of-scope` counts from the detection metadata lines.
 
-If nothing to clean, say so and stop.
+If there are no candidates, say so and stop.
 
 ### 4. Confirm
 
@@ -56,7 +54,7 @@ Ask the user for a single confirmation before proceeding. Do NOT proceed without
 
 ## Rules
 
-- NEVER delete `$TARGET` or `main`.
+- NEVER delete `$TARGET` or `main`. Detection already excludes both; do not re-add them by hand.
 - NEVER touch remote branches or remote tracking refs.
 - Use `-d` (safe delete) for regular merges. `-D` for squash-merged branches is pre-approved by the step 4 confirmation; any other `-D` requires explicit user approval.
 - If a worktree removal fails, report the error and continue with the remaining items.
