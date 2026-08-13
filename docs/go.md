@@ -10,6 +10,9 @@ Standard library and runtime source: `go env GOROOT` returns the root directory.
 - Only use github.com/stretchr/testify/require and not github.com/stretchr/testify/assert.
 - Unless there is no other way around it, write tests in the external package form `xxx_test` instead of `xxx`.
 - Use `t.Context()` instead of `context.Background()` in tests. The test context is cancelled when the test ends.
+- Test scratch dirs: `t.TempDir()`. Auto-removed at test end → NEVER add `t.Cleanup(os.RemoveAll)`/`defer os.RemoveAll` beside it.
+- NEVER pass `"."` as `os.MkdirTemp` parent — first arg is the PARENT dir, so `"."` writes into package source dir → leftovers on failure, suite unrunnable from read-only checkout (sandboxed reviewer, read-only mount). Use `t.TempDir()`; `os.MkdirTemp("", …)` only where no `*testing.T` exists.
+- Scratch `go.mod` with `replace` back to repo → absolute path via `filepath.Abs` + `filepath.ToSlash`. Relative `=> ../..` silently depends on scratch dir nesting inside repo → breaks under `$TMPDIR`.
 
 ## Examples
 
@@ -25,7 +28,7 @@ NEVER write an example as a standalone executable (`package main` + `func main()
 - Deterministic: end with exact `// Output:` block — `go test` verifies it.
 - Error handling: `fmt.Printf("failed to <action>: %s\n", err); return`. NEVER `log.Fatal`/`panic`.
 - Comments explain what and why, not restating code.
-- Temp files when required: `os.MkdirTemp(".", ".tmp-<topic>-*")` + `defer os.RemoveAll(dir)`.
+- Temp files when required: `os.MkdirTemp("", ".tmp-<topic>-*")` + `defer os.RemoveAll(dir)`. `Example*` takes no `*testing.T` → no `t.TempDir()`, cleanup stays manual. Empty first arg = `$TMPDIR`; NEVER `"."` (see Testing).
 - Verify: `go test ./examples/` + `go vet ./examples/` must pass.
 
 ## File Naming & Layout
