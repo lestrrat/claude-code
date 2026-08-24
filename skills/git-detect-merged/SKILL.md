@@ -24,11 +24,12 @@ Exit codes: `0` → table produced, `1` → runtime error, `2` → usage error. 
 
 ## Output
 
-Three `#` metadata lines, then a TSV table with a header row:
+Four `#` metadata lines, then a TSV table with a header row:
 
 ```
 # target: main
 # trunk: main
+# upstream: origin/main  behind: 0  last-fetch: 2026-08-18T19:23:40+0900
 # candidates: 8  merged: 7  unmerged: 1  out-of-scope: 0
 branch	merge	status	worktree	reason
 wt-clean	regular	clean	/repo/.worktrees/wt-clean	-
@@ -36,6 +37,8 @@ wt-dirty	regular	dirty	/repo/.worktrees/wt-dirty	uncommitted-changes
 ```
 
 Only merged branches get a row. The `unmerged` and `out-of-scope` counts cover every branch the script examined and excluded, so an excluded branch is visible rather than absent.
+
+Read the `upstream` line before the table. A target that is behind its upstream does not yet contain the merges it is being asked about, so branches that really did land come back `unmerged`. The script warns on stderr when `behind` is not `0`; treat any non-zero value as making the whole table provisional, and say so when reporting. `last-fetch` is when the repo last contacted the remote at all — a value hours or days old means even `behind: 0` may be measuring against stale data, so fetch first when the counts look wrong.
 
 | Column | Values |
 |--------|--------|
@@ -57,4 +60,4 @@ A branch checked out in its OWN `<repo>/.worktrees/<branch>` is not active work 
 
 ## Report
 
-Present the table to the user. State the target branch, plus the `unmerged` and `out-of-scope` counts.
+Present the table to the user. State the target branch, plus the `unmerged` and `out-of-scope` counts. When `behind` is not `0`, say that first and state that the table cannot be trusted until the target catches up.

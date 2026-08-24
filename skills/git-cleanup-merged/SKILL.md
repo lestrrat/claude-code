@@ -24,6 +24,8 @@ Use the `git-detect-merged` skill with the same args. It returns the TSV table t
 
 Detection exited non-zero → report the error and STOP. NEVER fall back to a hand-run `git branch --merged`.
 
+Detection reported a non-zero `behind` count → STOP before step 2. `$TARGET` is missing the merges it was asked about, so the table understates what is merged, and deleting from it is safe but the run is incomplete. Tell the user the count and ask them to bring `$TARGET` up to date, then re-run.
+
 ### 2. Build cleanup candidates
 
 - Include a row if and only if its `status` is exactly `clean`.

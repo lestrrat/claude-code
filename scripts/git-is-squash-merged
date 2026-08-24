@@ -4,14 +4,29 @@
 # Usage: git-is-squash-merged <target-branch> <candidate-branch>
 #
 # Exit codes:
-#   0  — squash-merged (output: "squash-merged:cherry" or "squash-merged:patch-id")
+#   0  — squash-merged. Output names the evidence: "squash-merged:cherry" (every
+#         branch commit already has an equivalent on the target), ":patch-id" (a
+#         target commit carries the branch's combined diff), ":contained" (merging
+#         the branch into the target would change nothing).
 #   1  — not merged
 #   2  — usage error
 #
-# SAFETY: a false "merged" verdict causes the caller to delete the branch, which
-# can be the only copy of the work. This script therefore FAILS CLOSED: a merged
-# verdict is emitted only when the branch's net effect is proven present in the
-# CURRENT target tree. Any error or ambiguity resolves to "not merged".
+# SAFETY: a false "merged" verdict causes the caller to delete the branch, so this
+# script FAILS CLOSED: a merged verdict is emitted only when the branch's net
+# effect is proven to have LANDED in the target's history and is not undone there.
+# Any error or ambiguity resolves to "not merged".
+#
+# Landing is proven against the target's HISTORY, not against its current tree. An
+# earlier version demanded that simulating the merge into the current target tree
+# produce that exact tree. That check breaks the moment the target advances over
+# any file the branch touched: the simulated merge then conflicts or yields a
+# different tree, and the branch is reported unmerged forever after. Only the few
+# most recently merged branches ever passed it. History is the right anchor
+# because once the patch is in the target's history the work is recoverable from
+# there, so dropping the branch ref cannot destroy the only copy.
+#
+# The current-tree check is kept as a fast positive: when it does hold, the branch
+# is contained and no history walk is needed.
 set -euo pipefail
 
 if [ $# -ne 2 ]; then
@@ -22,19 +37,16 @@ fi
 TARGET="$1"
 BRANCH="$2"
 
-# verify_present_in_target — prove the branch's net effect is already contained in
-# the CURRENT target tree. Simulates merging BRANCH into TARGET with a 3-way merge:
-# if the merge would not change TARGET's tree, then every change the branch carries
-# is already present in target. This accounts for later reverts on target (which
-# make the merge reintroduce the change → non-no-op → not contained) and for target
-# having advanced with unrelated commits. A historical patch match is NOT enough.
-# Returns 0 only on a proven no-op merge; any failure/conflict/ambiguity returns 1.
-verify_present_in_target() {
+# contained_in_target_tree — does merging BRANCH into TARGET change nothing? A
+# no-op 3-way merge proves every change the branch carries is already in the
+# current target tree. Conflicts, errors, and a differing tree all return 1: they
+# mean "not proven here", not "not merged", so callers fall through to the
+# history walk rather than concluding anything.
+contained_in_target_tree() {
   local target_tree merged_tree
   target_tree=$(git rev-parse --verify --quiet "$TARGET^{tree}") || return 1
   # `git merge-tree --write-tree` exits 0 on a clean merge and prints the merged
-  # tree oid on the first line; a non-zero exit (conflicts or error) means the
-  # branch is not cleanly contained, so fail closed.
+  # tree oid on the first line; a non-zero exit means conflict or error.
   merged_tree=$(git merge-tree --write-tree "$TARGET" "$BRANCH" 2>/dev/null) || return 1
   merged_tree=${merged_tree%%$'\n'*}
   [ -n "$merged_tree" ] || return 1
@@ -53,10 +65,38 @@ patch_id_of() {
   printf '%s' "${pid_out%% *}"
 }
 
-# Phase 1: Single-commit cherry check.
-# If git cherry reports all commits as already present (-) or no output, the branch
-# is a squash-merge candidate — but only trust it if the changes are still present
-# in the current target tree (a cherry match survives a later revert).
+# pid_in_set — is patch-id $1 a member of the newline-delimited set $2?
+pid_in_set() {
+  local needle="$1" haystack="$2" line
+  [ -n "$needle" ] || return 1
+  [ -n "$haystack" ] || return 1
+  while IFS= read -r line; do
+    if [ -n "$line" ] && [ "$line" = "$needle" ]; then
+      return 0
+    fi
+  done <<< "$haystack"
+  return 1
+}
+
+# commit_patch_id — patch-id of what $1 changed against its first parent, printed
+# on stdout. Exit 3 means $1 is parentless: a root commit has no such diff and can
+# be neither a landing nor a revert, so callers skip it rather than erroring. Exit
+# 1 stays a real diff failure.
+commit_patch_id() {
+  git rev-parse --verify --quiet "$1^" >/dev/null || return 3
+  patch_id_of "$1^" "$1"
+}
+
+# commit_reverse_patch_id — the same diff inverted, i.e. the patch-id a commit
+# reverting $1 would carry. Same exit convention as commit_patch_id.
+commit_reverse_patch_id() {
+  git rev-parse --verify --quiet "$1^" >/dev/null || return 3
+  patch_id_of "$1" "$1^"
+}
+
+# Phase 1: cherry check. `git cherry` marks a branch commit `-` when an equivalent
+# patch already exists on the target side, so no `+` line means every commit the
+# branch carries has landed. That is the plain squash/rebase-merge shape.
 cherry_output=$(git cherry -v "$TARGET" "$BRANCH" 2>/dev/null) || {
   echo "error: git cherry failed for $TARGET..$BRANCH" >&2
   exit 2
@@ -72,54 +112,145 @@ if [ -n "$cherry_output" ]; then
 fi
 
 if [ "$cherry_all_merged" = true ]; then
-  if verify_present_in_target; then
-    echo "squash-merged:cherry"
-    exit 0
-  fi
-  # Historical cherry match but changes absent from the current target tree
-  # (e.g. cherry-picked then reverted). Fail closed.
-  exit 1
+  METHOD=cherry
+else
+  METHOD=patch-id
 fi
 
-# Phase 2: Combined patch-id check for multi-commit squash merges.
-# When multiple commits are squash-merged into one, git cherry reports all "+"
-# because individual patch-ids differ from the combined diff's patch-id.
+# Fast positive: the branch's changes are already in the current target tree, so
+# there is nothing left to prove.
+if contained_in_target_tree; then
+  if [ "$cherry_all_merged" = true ]; then
+    echo "squash-merged:cherry"
+  else
+    echo "squash-merged:contained"
+  fi
+  exit 0
+fi
+
 base=$(git merge-base "$TARGET" "$BRANCH") || {
   echo "error: cannot find merge-base for $TARGET and $BRANCH" >&2
   exit 2
 }
 
-# Combined branch diff patch-id. A failed diff exits 2 (error) — never "merged".
+# Two patch-id sets drive the verdict.
+#
+# LANDING_PIDS — a target commit carrying any of these proves the branch's work
+# arrived. It holds the combined branch diff (the shape a squash merge takes) and,
+# when cherry matched, each individual branch commit (the shape a rebase merge or a
+# run of cherry-picks takes).
+#
+# REVERT_PIDS — the reverse of each of those. A target commit carrying one of them
+# undoes that much of the branch. Per-commit reverses matter because a revert of a
+# rebase-merged branch is normally one revert commit per original commit, and none
+# of those matches the reverse of the combined diff.
+LANDING_PIDS=""
+REVERT_PIDS=""
+
 branch_pid=$(patch_id_of "$base" "$BRANCH") || {
   echo "error: git diff failed for $base..$BRANCH" >&2
   exit 2
 }
-if [ -z "$branch_pid" ]; then
-  # Branch introduces no net change vs base — candidate merged, but still require
-  # the change to be present in the current target tree before saying so.
-  if verify_present_in_target; then
-    echo "squash-merged:patch-id"
-    exit 0
-  fi
-  exit 1
+if [ -n "$branch_pid" ]; then
+  LANDING_PIDS="$branch_pid"
 fi
 
-# Compare against each commit on the target side since the merge-base.
+reverse_pid=$(patch_id_of "$BRANCH" "$base") || {
+  echo "error: git diff failed for $BRANCH..$base" >&2
+  exit 2
+}
+if [ -n "$reverse_pid" ]; then
+  REVERT_PIDS="$reverse_pid"
+fi
+
+if [ "$cherry_all_merged" = true ]; then
+  while IFS= read -r hash; do
+    rc=0
+    commit_pid=$(commit_patch_id "$hash") || rc=$?
+    if [ "$rc" = 3 ]; then
+      continue
+    fi
+    if [ "$rc" != 0 ]; then
+      echo "error: git diff failed for $hash" >&2
+      exit 2
+    fi
+    rc=0
+    reverse_pid=$(commit_reverse_patch_id "$hash") || rc=$?
+    if [ "$rc" != 0 ]; then
+      echo "error: git diff failed for $hash" >&2
+      exit 2
+    fi
+    if [ -n "$commit_pid" ]; then
+      LANDING_PIDS="${LANDING_PIDS}"$'\n'"${commit_pid}"
+    fi
+    if [ -n "$reverse_pid" ]; then
+      REVERT_PIDS="${REVERT_PIDS}"$'\n'"${reverse_pid}"
+    fi
+  done < <(git log --format=%H "$base".."$BRANCH")
+fi
+
+# Walk scope. A target commit can only carry the branch's patch, or its reverse, if
+# it touches a file the branch touched, so restricting the walk to those paths drops
+# no possible match while keeping a long-lived target from costing one diff per
+# commit since the fork. `--full-history` is required: plain pathspec filtering
+# simplifies history and can drop commits that do touch the path. `:(top,literal)`
+# anchors each path at the repo root and stops glob characters in filenames being
+# read as patterns. A branch spread over a huge number of files skips the scoping,
+# where assembling the argument list would cost more than the walk it saves.
+#
+# Both the combined diff and the per-commit diffs contribute paths. Neither alone
+# is enough: the combined diff misses a file some branch commit added and a later
+# one deleted, and the per-commit listing misses whatever a merge inside the branch
+# brought in. `--no-renames` lists a rename as its two paths instead of one.
+SCOPE_LIMIT=200
+scope_paths=()
+while IFS= read -r path; do
+  [ -n "$path" ] || continue
+  if [ "${#scope_paths[@]}" -ge "$SCOPE_LIMIT" ]; then
+    scope_paths=()
+    break
+  fi
+  scope_paths+=(":(top,literal)$path")
+done < <(
+  {
+    git -c core.quotepath=false diff --no-ext-diff --no-renames --name-only "$base" "$BRANCH"
+    git -c core.quotepath=false log --no-renames --format= --name-only "$base".."$BRANCH"
+  } | sort -u
+)
+
+# `--topo-order` puts every commit before its ancestors regardless of committer
+# dates, which is what makes "seen first" mean "happened later" below.
+log_args=(--topo-order --full-history --format=%H "$base".."$TARGET")
+if [ "${#scope_paths[@]}" -gt 0 ]; then
+  log_args+=(-- "${scope_paths[@]}")
+fi
+
+# Phase 2: walk the target's own commits since the fork point, newest first, and
+# stop at the first one that is either a landing or a revert of the branch. Newest
+# first is what orders the two against each other: a revert seen before any landing
+# is a revert that came after it, so the work is gone; a landing seen first means
+# the branch was re-applied after any revert, so it is present.
 while IFS= read -r hash; do
-  commit_pid=$(patch_id_of "$hash^" "$hash") || {
+  rc=0
+  commit_pid=$(commit_patch_id "$hash") || rc=$?
+  if [ "$rc" = 3 ]; then
+    continue
+  fi
+  if [ "$rc" != 0 ]; then
     echo "error: git diff failed for $hash" >&2
     exit 2
-  }
+  fi
   [ -n "$commit_pid" ] || continue
-  if [ "$branch_pid" = "$commit_pid" ]; then
-    # Historical patch-id match — confirm it survives in the current target tree.
-    if verify_present_in_target; then
-      echo "squash-merged:patch-id"
-      exit 0
-    fi
+  if pid_in_set "$commit_pid" "$LANDING_PIDS"; then
+    echo "squash-merged:$METHOD"
+    exit 0
+  fi
+  if pid_in_set "$commit_pid" "$REVERT_PIDS"; then
+    # The branch landed and was then reverted, or never landed and the target
+    # happens to carry its inverse. Either way the changes are not there now.
     exit 1
   fi
-done < <(git log --format=%H "$base".."$TARGET")
+done < <(git log "${log_args[@]}")
 
-# No match — not squash-merged.
+# No landing found — not squash-merged.
 exit 1
