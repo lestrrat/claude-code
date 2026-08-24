@@ -9,6 +9,10 @@
 #                  "Scope pre-filter" below). Default: main.
 #
 # Output (stdout): `#`-prefixed metadata lines, then a TSV table with a header row.
+# The metadata names the target, the trunk, the counts, and how current the target
+# is: its upstream, how many commits it is behind that upstream, and when the repo
+# last fetched. A stale target is the usual reason a branch that really did land
+# reads as unmerged, so the freshness line is there to be read before the table.
 # Columns: branch, merge, status, worktree, reason.
 #   merge    — regular | squash
 #   status   — clean | dirty | checked-out | unknown
@@ -253,8 +257,37 @@ while IFS= read -r branch; do
   ROWS="${ROWS}${branch}"$'\t'"${merge_type}"$'\t'"${CLASS_STATUS}"$'\t'"${wt_col}"$'\t'"${CLASS_REASON}"$'\n'
 done <<< "$ALL_BRANCHES"
 
+# Target freshness. A local target that has not caught up with its upstream is
+# missing the very merges this script looks for, so every branch merged in those
+# commits reads as unmerged. Reporting it is cheap and offline; nothing here
+# contacts the remote, and the last-fetch time comes from FETCH_HEAD's mtime.
+UPSTREAM="-"
+BEHIND="-"
+LAST_FETCH="never"
+
+if upstream_ref=$(git rev-parse --abbrev-ref --symbolic-full-name "$TARGET@{upstream}" 2>/dev/null); then
+  UPSTREAM="$upstream_ref"
+  if behind_count=$(git rev-list --count "$TARGET".."$upstream_ref" 2>/dev/null); then
+    BEHIND="$behind_count"
+  fi
+fi
+
+fetch_head="$(git rev-parse --git-common-dir)/FETCH_HEAD"
+if [ -f "$fetch_head" ]; then
+  if fetch_time=$(date -r "$fetch_head" '+%Y-%m-%dT%H:%M:%S%z' 2>/dev/null); then
+    LAST_FETCH="$fetch_time"
+  else
+    LAST_FETCH="unknown"
+  fi
+fi
+
+if [ "$BEHIND" != "-" ] && [ "$BEHIND" != "0" ]; then
+  echo "warning: '$TARGET' is $BEHIND commit(s) behind '$UPSTREAM'. Branches merged in those commits will be reported unmerged. Run: git fetch && git -C <main-worktree> merge --ff-only $UPSTREAM" >&2
+fi
+
 echo "# target: $TARGET"
 echo "# trunk: $TRUNK"
+echo "# upstream: $UPSTREAM  behind: $BEHIND  last-fetch: $LAST_FETCH"
 echo "# candidates: $n_candidates  merged: $n_merged  unmerged: $n_unmerged  out-of-scope: $n_out_of_scope"
 printf 'branch\tmerge\tstatus\tworktree\treason\n'
 printf '%s' "$ROWS"
