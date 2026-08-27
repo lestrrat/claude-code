@@ -31,6 +31,13 @@ Read linked doc BEFORE any work in that area. No exceptions.
 - Focus on implementation first. Minimize repeated tests, pass/fail counting, and other check-in work during active editing.
 - Run broader verification only at meaningful checkpoints, before handoff, or when risk/blockers justify it.
 
+# Line Length
+
+- Keep written lines reasonably short. Target approximately 120 characters and generally stay below 250.
+  Use judgment rather than enforcing a hard limit.
+- Wrap prose paragraphs and generated documentation. Do not leave paragraphs as single lines
+  thousands of characters long → oversized diffs can prevent reviewers from reading the change.
+
 # Request Wording (ALL tasks)
 
 - Applies to prompts, delegations, queries, reviews, reports, and tool instructions.
