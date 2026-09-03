@@ -13,15 +13,17 @@ Prefer one command per Bash call. `&&`/`||`/`;` chaining and multi-line commands
 
 ## Dedicated Tools Over Shell
 
-ALWAYS use dedicated tools. Bash is ONLY for commands with no tool equivalent.
+ALWAYS use a dedicated tool where one exists. Bash is for commands with no tool equivalent.
 
 | Task | Use | NOT |
 |------|-----|-----|
 | Read files | `Read` tool | `cat`/`head`/`tail` |
-| Search content | `Grep` tool | `grep`/`rg` |
-| Find files | `Glob` tool | `find`/`ls` |
 | Edit files | `Edit` tool | `sed`/`awk` |
 | Write files | `Write` tool | `echo`/`cat` with redirection |
+| Search content | `grep`/`rg` in Bash | — |
+| Find files | `find` in Bash | — |
+
+There is no `Grep` or `Glob` tool. Check the session's tool list before using any tool named here.
 
 ## Working Directory
 
@@ -39,7 +41,7 @@ Other agents, other sessions, and the user share this machine. Name/pattern kill
 | `kill -9 -1`, `kill 0`, `kill -- -<pgid>` | BANNED. Kills whole sessions/groups |
 | `kill <PID>` | ONLY for a PID from a process YOU started in THIS session and whose PID you captured at launch |
 
-Background processes started via the Bash tool → stop with the harness background-task tool (`KillShell`/`TaskStop`), NEVER a shell kill.
+Background processes started via the Bash tool → stop with the `TaskStop` tool, NEVER a shell kill.
 
 Port in use, stale server, hung process you did NOT start:
 
