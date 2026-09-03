@@ -26,7 +26,6 @@ Read linked doc BEFORE any work in that area. No exceptions.
 
 | Area | Trigger | Doc |
 |------|---------|-----|
-| Shell | Using Bash tool, or processing output from gh, curl, kubectl, cloud CLIs | `~/.claude/docs/shell.md` |
 | Git | commit, push, add, branch, merge, rebase, worktree, commit/PR messages, etc. | `~/.claude/docs/git-operations.md` |
 | Go | Writing Go code | `~/.claude/docs/go.md` |
 | Go servers | Writing Go server, daemon, worker, listener, or other long-lived-goroutine code | `~/.claude/docs/go-server-lifecycle.md` |
