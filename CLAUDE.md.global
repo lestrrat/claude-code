@@ -36,7 +36,7 @@ Read linked doc BEFORE any work in that area. No exceptions.
 # GitHub
 
 - ALWAYS use `gh` CLI for GitHub interactions. NEVER scrape pages or construct API URLs manually.
-- Large/multi-record `gh` output → store to `.tmp/` first (see shell.md Output Storage). Single-value `--jq` queries OK direct.
+- Large/multi-record `gh` output → store to `.tmp/` first. Single-value `--jq` queries OK direct.
 
 # Execution
 
