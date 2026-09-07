@@ -103,3 +103,10 @@ Read linked doc BEFORE any work in that area. No exceptions.
 # Code Reviews
 
 - Not-applicable review feedback → add inline code comment explaining why. Prevents repeat comments.
+
+# Codex
+
+- Every `wait_agent` call: set `timeout_ms` explicitly to 2× the estimated remaining time to completion, in ms.
+  Clamp to the tool definition's min/max wait range. No estimate possible → set the default wait explicitly.
+  NEVER shorten the wait for a quick check — a notification releases the wait early anyway.
+  After a timeout, re-estimate completion and wait again by the same rule.
