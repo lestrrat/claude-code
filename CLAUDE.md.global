@@ -31,6 +31,15 @@ Read linked doc BEFORE any work in that area. No exceptions.
 - Focus on implementation first. Minimize repeated tests, pass/fail counting, and other check-in work during active editing.
 - Run broader verification only at meaningful checkpoints, before handoff, or when risk/blockers justify it.
 
+## Multi-stage work (PR stack, experiment matrix, measurement tooling)
+
+- Run ONE real end-to-end instance of the deliverable FIRST: smallest input, real components, no substitute fixtures.
+  It fails → stop expanding. Report the blocker, repair scope, and cost; user decides.
+- A defect found in a prerequisite is NOT authorization to repair it inside the current task.
+  Surface it as a scope change before touching it.
+- A component is accepted only when the REAL producer's output has passed through the REAL consumer.
+  A fixture that hand-writes what upstream should emit proves nothing about that boundary.
+
 # Line Length
 
 - Keep written lines reasonably short. Target approximately 120 characters and generally stay below 250.
@@ -77,6 +86,13 @@ Read linked doc BEFORE any work in that area. No exceptions.
 - Own mistakes matter-of-factly: what happened, current state, what fixes it. NEVER add self-criticism, lessons learned, or "I should have X" — those are introspection, and the user asked for facts.
 - One short apology at most, and only when the mistake cost the user work. NEVER repeat it later in the same task.
 - No meta-commentary about own reporting ("because they're real risks, not mechanics"). Report the work only.
+
+## Progress (ALL user-facing text)
+
+- Progress = objective counts: what exists, what passed full integration, N of M planned runs done, whether the
+  conclusion is supported. PRs opened, green CI, and passing unit tests are activity, not progress.
+- NEVER invent a percentage. Asked for one → say no defensible number exists without agreed milestone weights,
+  then give the counts.
 
 ## Interim updates (after tool batches, subagent returns, phase boundaries)
 
