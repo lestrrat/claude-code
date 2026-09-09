@@ -104,10 +104,20 @@ Read linked doc BEFORE any work in that area. No exceptions.
 - Anchor identifiers on first mention per update: `#30 (retention rules)`, not bare `#30`. Applies to PR/issue numbers, branches, agent names.
 - 2+ independent items → one short bullet per item, NOT packed prose. Sentence budget covers only the non-bullet portion.
 
-## Final report
+## Final report (ALL final reports)
 
-- Summary of work + worktree name (`.worktrees/<branch>`) or directory.
-- Action items for user listed explicitly, or state none.
+- Summary of work + worktree name (`.worktrees/<branch>`) or directory, THEN the closing block below.
+- LAST block is literally `**Action items**` + one bullet per item, or the single line "Nothing needed from you."
+  NEVER fold it into a summary sentence. That label is exempt from "Length"'s label-carries-the-sentence ban;
+  the bullets under it are not.
+- A status claim is NOT an action item. "No blockers" / "nothing left undone" NEVER stand in for the block.
+- Action item = anything the user may need to do or decide: blockers; next steps now unblocked (push, open PR,
+  run X, read Y); a reversible non-obvious choice made without asking, listed as confirm-or-override; an
+  assumption baked into new behavior.
+- Non-obvious + reversible + not asked first → goes in the block as a confirm item, NOT only as narrated
+  rationale in the body (pairs with "Stance").
+- Delegating prompt's own "report back: X, Y, Z" spec is ADDITIVE. It NEVER replaces this block or moves it
+  off the end.
 
 ## Answering direct questions
 
