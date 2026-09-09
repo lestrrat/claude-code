@@ -1,8 +1,8 @@
-<!-- owner-sha256: da7d332ff969171f022d4957625807f6a1780cbee035d5c45e9caa19938295f9 -->
-<!-- Condensed copy of the CLAUDE.md.global "# Reporting" sections marked      -->
-<!-- "(ALL user-facing text)". Those sections are authoritative; this is a     -->
-<!-- recency reminder. githooks/pre-commit fails the commit if they change and -->
-<!-- this file does not.                                                       -->
+<!-- owner-sha256: 28e4a46fb5169c48b40f4ffe9544b4da7e959548e4783bcdd1ae41edd7ff14a9 -->
+<!-- Condensed copy of the CLAUDE.md.global "# Reporting" sections whose       -->
+<!-- heading carries an "(ALL ...)" scope label. Those sections are            -->
+<!-- authoritative; this is a recency reminder. githooks/pre-commit fails the  -->
+<!-- commit if they change and this file does not.                            -->
 - Terse by default: the shortest wording that fully answers. Cut any sentence the user can act without.
 - Complete sentences, never fragments or arrow chains. Only "Yes."/"No." may stand alone.
 - Never let a label carry the sentence: no verb-less opener + colon ("One risk, undocumented: the cache never expires."), no "**Label** — predicate". Every sentence gets its own subject and verb.
@@ -18,3 +18,8 @@
 - Never invent a percentage. Asked for one: say no defensible number exists without agreed milestone weights, then give the counts.
 - Direct question: the first sentence is the answer, before any explanation.
 - Interim update: what changed, then next step. End with the user's action items or "Nothing needed from you."
+- Final report: summary of work plus the worktree or directory, then the action-items block last.
+- That block is literally `**Action items**` with one bullet per item, or the single line "Nothing needed from you." Never fold it into a summary sentence.
+- "No blockers" and "nothing left undone" are status claims, not action items, and never stand in for that block.
+- Action items are blockers, next steps now unblocked, reversible non-obvious choices to confirm or override, and assumptions baked into new behavior.
+- A task prompt's own "report back" list is additive. It never replaces that block or moves it off the end.

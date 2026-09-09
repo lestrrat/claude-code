@@ -9,22 +9,25 @@
 # edit is committed and never otherwise.
 #
 # Hashes STAGED content, not the working tree, so a partial `git add` cannot
-# sneak an unsynced change past the gate.
+# sneak an unsynced change past the gate. That applies to the extractor too: it
+# picks which sections are authoritative, so widening its marker set changes the
+# rules without touching CLAUDE.md.global, and staging it alone must still gate.
 
 set -eu
 
-repo_root="$(git rev-parse --show-toplevel)"
 owner="CLAUDE.md.global"
+extractor="githooks/reporting-rules-extract"
 condensed="scripts/reporting-rules-condensed.md"
 
-# Nothing to check unless the owner file is part of this commit.
-git diff --cached --name-only | grep -qx "$owner" || exit 0
+# Nothing to check unless a file that determines the rules is part of this commit.
+git diff --cached --name-only | grep -qxF -e "$owner" -e "$extractor" || exit 0
 
-# Deleting either file is a deliberate teardown, not a sync failure.
+# Deleting any of these is a deliberate teardown, not a sync failure.
 git cat-file -e ":$owner" 2>/dev/null || exit 0
+git cat-file -e ":$extractor" 2>/dev/null || exit 0
 git cat-file -e ":$condensed" 2>/dev/null || exit 0
 
-expected="$(git show ":$owner" | "$repo_root/githooks/reporting-rules-extract" | sha256sum | cut -d' ' -f1)"
+expected="$(git show ":$owner" | bash <(git show ":$extractor") | sha256sum | cut -d' ' -f1)"
 recorded="$(git show ":$condensed" | sed -n 's/^<!-- owner-sha256: \([0-9a-f]\{64\}\) -->$/\1/p')"
 
 [ "$expected" = "$recorded" ] && exit 0
@@ -32,7 +35,8 @@ recorded="$(git show ":$condensed" | sed -n 's/^<!-- owner-sha256: \([0-9a-f]\{6
 cat >&2 <<EOF
 pre-commit: reporting rules out of sync.
 
-  $owner "(ALL user-facing text)" sections have changed, but
+  The staged reporting rules ($owner sections selected by
+  $extractor) have changed, but
   $condensed was not regenerated.
 
   staged rules hash: $expected
@@ -41,7 +45,7 @@ pre-commit: reporting rules out of sync.
 To fix, rewrite the bullets in $condensed to match the new
 rules, then update its owner-sha256 line to the staged rules hash:
 
-  git show :$owner | githooks/reporting-rules-extract | sha256sum
+  git show ":$owner" | bash <(git show ":$extractor") | sha256sum
 
 Then \`git add $condensed\` and commit again.
 EOF
