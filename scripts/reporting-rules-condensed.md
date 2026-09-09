@@ -1,8 +1,8 @@
-<!-- owner-sha256: cb8a29d510b35b0aa3226a37869cb77be5fda93bd1ede821644ed68abba3ff2f -->
-<!-- Condensed copy of the CLAUDE.md.global "# Reporting" sections carrying a  -->
-<!-- reminder marker in their heading. Those sections are authoritative; this  -->
-<!-- is a recency reminder. githooks/pre-commit fails the commit if they       -->
-<!-- change and this file does not.                                            -->
+<!-- owner-sha256: 28e4a46fb5169c48b40f4ffe9544b4da7e959548e4783bcdd1ae41edd7ff14a9 -->
+<!-- Condensed copy of the CLAUDE.md.global "# Reporting" sections whose       -->
+<!-- heading carries an "(ALL ...)" scope label. Those sections are            -->
+<!-- authoritative; this is a recency reminder. githooks/pre-commit fails the  -->
+<!-- commit if they change and this file does not.                            -->
 - Terse by default: the shortest wording that fully answers. Cut any sentence the user can act without.
 - Complete sentences, never fragments or arrow chains. Only "Yes."/"No." may stand alone.
 - Never let a label carry the sentence: no verb-less opener + colon ("One risk, undocumented: the cache never expires."), no "**Label** — predicate". Every sentence gets its own subject and verb.

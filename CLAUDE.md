@@ -32,7 +32,7 @@ Claude Code configuration dotfiles. No application code and no build step. A few
 `scripts/hook-reporting-rules` prints `scripts/reporting-rules-condensed.md` on every prompt, countering attention decay: `CLAUDE.md` is in context from turn one, but by turn 30 it sits thousands of tokens back.
 
 - The hook does ONE file read — no extraction, hashing, or comparison. It runs every turn, so per-turn work stays at zero.
-- `scripts/reporting-rules-condensed.md` is a hand-written condensed copy. The authoritative sections are the `# Reporting` subsections of `CLAUDE.md.global` whose heading carries a reminder marker; `githooks/reporting-rules-extract` owns the marker set.
+- `scripts/reporting-rules-condensed.md` is a hand-written condensed copy. The authoritative sections are the `# Reporting` subsections of `CLAUDE.md.global` whose heading carries a parenthetical scope label starting with `ALL `; `githooks/reporting-rules-extract` owns that pattern.
 - Sync is enforced at commit time by `githooks/pre-commit`, NOT by an instruction to keep the two aligned. The copy carries an `owner-sha256` of the authoritative sections; the hook rejects a commit that changes them without regenerating the copy. Failure message states the resync steps.
 - The hook triggers on `CLAUDE.md.global` OR `githooks/reporting-rules-extract` being staged — widening the marker set changes which rules are authoritative without touching `CLAUDE.md.global`, so the extractor must gate too.
 - Editing `CLAUDE.md.global`'s tagged sections → rewrite the condensed bullets, then update `owner-sha256`. Marker-based selection means tagging a new section pulls it into the check automatically.
