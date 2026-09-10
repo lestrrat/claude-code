@@ -31,6 +31,13 @@ Read linked doc BEFORE any work in that area. No exceptions.
 - Focus on implementation first. Minimize repeated tests, pass/fail counting, and other check-in work during active editing.
 - Run broader verification only at meaningful checkpoints, before handoff, or when risk/blockers justify it.
 
+## Test execution — full suites belong to CI
+
+- Project has remote CI → push and let CI run the full suite. NEVER spend local cycles re-proving what CI runs anyway.
+- ALWAYS run focused tests locally for what you just touched. One package or one test beats a CI round trip.
+- No CI configured, or CI unreachable → run the full suite locally.
+- Offloaded → "tests pass" waits on the CI result. Report what CI reported. NEVER present a local partial run as the suite.
+
 ## Multi-stage work (PR stack, experiment matrix, measurement tooling)
 
 - Run ONE real end-to-end instance of the deliverable FIRST: smallest input, real components, no substitute fixtures.
