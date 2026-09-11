@@ -61,6 +61,17 @@ Defaults, not hard rules — deviate when a clearer structure fits. The build-co
   - Canonical example: `lestrrat-go/acidns` `UDPServer` — receiver holds only validated config (doc: "does NOT carry runtime state… may be Run multiple times to spawn independent instances"); `Run(ctx) (*UDPController, error)` allocates the per-call runtime-state object (`udpLoop`) **locally inside the call**, hands it to the spawned goroutine, and returns a handle. The receiver is never mutated. Other reference repos for house style: `lestrrat-go/jwx`, `lestrrat-go/helium`.
   - Options are folded into a private `cfg` struct **in the constructor** (`NewXxx(...)`), not at call time, via `lestrrat-go/option/v3` (typed marker-interface options + `ident` structs).
 
+## Reflection
+
+**`reflect` is a last resort.** Use it only when no statically typed construct expresses the operation.
+
+- Try first, in this order: a concrete type, an interface, a type switch or type assertion, generics, code generation.
+- NEVER reach for `reflect` to paper over an API you control — change the signature instead.
+- Legitimate uses are narrow: decoding into a caller-supplied arbitrary type (`encoding/json` style), struct-tag-driven
+  mapping, and test helpers that compare values of unknown type.
+- Using it → confine it to one unexported function, convert back to concrete types at that boundary, and state in a
+  comment why no static alternative works.
+
 ## Nil Arguments
 
 **A nil that reaches a function is a bug in the CALLER.** The callee documents its contract and checks cheaply; it does
@@ -70,6 +81,6 @@ not go out of its way to catch every nil.
 - Check with a plain `if x == nil` only, at the exported entry point. Unexported functions the package calls itself
   repeat no checks — validate once at the boundary.
 - NEVER use `reflect` to detect a typed-nil — a nil pointer stored in a non-nil interface (`reflect.ValueOf(x).IsNil()`,
-  `Kind()` switches, `IsZero()` probes). The machinery costs more than the bug it catches and hides the caller's error.
+  `Kind()` switches, `IsZero()` probes). It hides the caller's error, and it is not a last-resort case (see Reflection).
 - Typed-nil passes `x == nil` → the nil-pointer panic that follows is the correct outcome. Its stack names the caller
   that built the bad value.
