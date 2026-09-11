@@ -60,3 +60,16 @@ Defaults, not hard rules — deviate when a clearer structure fits. The build-co
 - **Entry-point methods must be goroutine-safe to invoke.** A main API entry point (`Compile()`, `Resolve()`, `Run()`, etc.) must be callable as `go obj.Compile()` — concurrent invocations on the same receiver must not race. To achieve this: treat the **receiver as immutable config**, and keep all per-call/process state **decoupled from the receiver** — it lives in locals, parameters, and return values, never in mutable fields on the receiver. One configured object can then be shared and fired across many goroutines safely. Corollary: don't stash mutable run state on the receiver "for convenience"; thread it through call parameters (or context) instead.
   - Canonical example: `lestrrat-go/acidns` `UDPServer` — receiver holds only validated config (doc: "does NOT carry runtime state… may be Run multiple times to spawn independent instances"); `Run(ctx) (*UDPController, error)` allocates the per-call runtime-state object (`udpLoop`) **locally inside the call**, hands it to the spawned goroutine, and returns a handle. The receiver is never mutated. Other reference repos for house style: `lestrrat-go/jwx`, `lestrrat-go/helium`.
   - Options are folded into a private `cfg` struct **in the constructor** (`NewXxx(...)`), not at call time, via `lestrrat-go/option/v3` (typed marker-interface options + `ident` structs).
+
+## Nil Arguments
+
+**A nil that reaches a function is a bug in the CALLER.** The callee documents its contract and checks cheaply; it does
+not go out of its way to catch every nil.
+
+- Document which parameters MUST NOT be nil in the doc comment. The contract is the primary guard.
+- Check with a plain `if x == nil` only, at the exported entry point. Unexported functions the package calls itself
+  repeat no checks — validate once at the boundary.
+- NEVER use `reflect` to detect a typed-nil — a nil pointer stored in a non-nil interface (`reflect.ValueOf(x).IsNil()`,
+  `Kind()` switches, `IsZero()` probes). The machinery costs more than the bug it catches and hides the caller's error.
+- Typed-nil passes `x == nil` → the nil-pointer panic that follows is the correct outcome. Its stack names the caller
+  that built the bad value.
