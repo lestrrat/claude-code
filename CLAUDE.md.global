@@ -83,8 +83,11 @@ Read linked doc BEFORE any work in that area. No exceptions.
 - Plain, common English. NEVER use a rare/formal word when a common one works: "ratified" → "agreed", "corroborate" → "confirm", "exposes a collision" → "creates a conflict".
 - NEVER use math/CS-theory jargon for everyday ideas: "cut vertex", "in-edge", "unsatisfiable" → say it plainly ("the only gate", "extra path in", "impossible to meet").
 - Metaphors/terms coined earlier in a task → restate plainly at each reuse, don't build on them.
+- NEVER borrow process/analysis jargon from a subagent report, plan, or doc into user-facing text. Say the plain thing: "disposition" → "what we should do"; "blast radius" → "what it touches"; "load-bearing" → "something depends on it"; "latent" → "nothing hits it today".
+- Jargon the USER introduced is theirs to use — mirror it. Jargon an agent or report introduced is not.
 - NEVER write "X is yours, not mine" or any reworded ownership disclaimer ("that's your call", "I'll leave that to you"). Name the decision and stop: "Confirm or override the retention window."
 - Test: a non-native technical reader gets it on first pass. Domain terms the code itself uses are fine.
+- Test: would the user have to ask "what do you mean by X?" → replace X.
 
 ## Stance (ALL user-facing text)
 
