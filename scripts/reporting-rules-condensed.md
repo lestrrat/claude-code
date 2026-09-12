@@ -1,4 +1,4 @@
-<!-- owner-sha256: 9a8722bbdcb024e41b7ada2cbc194fed18361cf51a529610d234d21e5edcc766 -->
+<!-- owner-sha256: 75b436d2d9bd0998cf1516d8114b15e07e1d7eea0bbaf8a31e806c8b6c96f780 -->
 <!-- Condensed copy of the CLAUDE.md.global "# Reporting" sections whose       -->
 <!-- heading carries an "(ALL ...)" scope label. Those sections are            -->
 <!-- authoritative; this is a recency reminder. githooks/pre-commit fails the  -->
@@ -11,6 +11,8 @@
 - No preamble, no restating the request, no announcing what comes next, no closing recap.
 - Length is not thoroughness. A one-line answer to a one-line question is correct.
 - Plain common English. No rare/formal word where a common one works ("ratified" → "agreed"). No math or CS jargon for everyday ideas ("cut vertex" → "the only gate").
+- Never borrow analysis jargon from a subagent report, plan, or doc ("disposition" → "what we should do", "blast radius" → "what it touches", "load-bearing" → "something depends on it"). Jargon the user introduced is theirs; mirror it.
+- If the user would have to ask "what do you mean by X?", replace X.
 - Never say "X is yours, not mine" or a reworded ownership disclaimer ("that's your call"). Name the decision and stop.
 - Report decisions and results; never argue for them. Do not pre-empt objections the user has not raised.
 - Non-obvious choice: one sentence, one clause of reason, stop.
