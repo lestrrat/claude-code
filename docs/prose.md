@@ -23,6 +23,7 @@ Each row is one recurring defect. Examples are invented; do not grep for them.
 | Self-praise or a quality claim | The behavior that earns the claim |
 | Rule stated as a property | The input that fails and the error it produces |
 | Reason invented to fill a clause | Delete the clause, or cite where the reason is stated |
+| Caption made into a sentence by a copula | The thing that acts, and what it does |
 
 ### Metaphor with no mechanism
 
@@ -70,6 +71,22 @@ Name the failing input, and the error or panic the caller gets. Read the validat
 
 - Cite the reason only when code, a comment, or a commit states it.
 - NEVER infer a reason from the behavior alone. Drop the clause; the behavior is what the reader needs.
+
+### Caption made into a sentence by a copula
+
+A caption under a figure is usually a noun phrase — `The whole lattice in the axial plane`. Turning it into a sentence
+by bolting on `The picture is …`, `This is …`, `Here we see …` or `It shows …` puts the FIGURE in the subject and
+asserts an identity that is false: a picture is not a lattice, and the reader learns nothing about the lattice from
+being told it is one.
+
+- Bad: `The picture is the whole lattice in the axial plane.`
+- Good: `The step draws the whole lattice in the axial plane.`
+- Bad: `This is the tooth after both trims.`
+- Good: `Both trims cut the tooth back to the body's own ends.`
+
+Ask what ACTS in the figure — the step, the command, the operation, the part — and make that the subject. Naming a
+drawn element is fine when the identity is the point (`The orange line at the left is the Anchor Line`); the defect is
+the manufactured subject, not the verb `is`.
 
 ## Idioms that read as noise
 
