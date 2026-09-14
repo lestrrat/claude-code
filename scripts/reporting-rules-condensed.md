@@ -1,4 +1,4 @@
-<!-- owner-sha256: 75b436d2d9bd0998cf1516d8114b15e07e1d7eea0bbaf8a31e806c8b6c96f780 -->
+<!-- owner-sha256: 64dd9e1b7615c670e562b8812f85af5af2ce0f06a1e2025fd665b01239428caa -->
 <!-- Condensed copy of the CLAUDE.md.global "# Reporting" sections whose       -->
 <!-- heading carries an "(ALL ...)" scope label. Those sections are            -->
 <!-- authoritative; this is a recency reminder. githooks/pre-commit fails the  -->
@@ -6,6 +6,7 @@
 - Terse by default: the shortest wording that fully answers. Cut any sentence the user can act without.
 - Complete sentences, never fragments or arrow chains. Only "Yes."/"No." may stand alone.
 - Never let a label carry the sentence: no verb-less opener + colon ("One risk, undocumented: the cache never expires."), no "**Label** — predicate". Every sentence gets its own subject and verb.
+- Never defer the point to a trailing "which"/"that" clause: no vague subject + vague verb (turned up, surfaced, revealed, raised, uncovered) + placeholder object (something, one thing, a finding). State the finding as the main clause; attribute it afterwards only if the source matters.
 - An em dash marks an aside inside a sentence that is already complete without it. Never use one to join two independent clauses or to replace a subject.
 - Bullets in reports are sentences and obey these rules. Headings, table cells, and PR comments are exempt.
 - No preamble, no restating the request, no announcing what comes next, no closing recap.
