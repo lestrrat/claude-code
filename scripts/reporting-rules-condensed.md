@@ -1,4 +1,4 @@
-<!-- owner-sha256: 64dd9e1b7615c670e562b8812f85af5af2ce0f06a1e2025fd665b01239428caa -->
+<!-- owner-sha256: 83e94df32110f1796e5e4d2d5b5433de919a8cb12a872a82f499f09b51e6886f -->
 <!-- Condensed copy of the CLAUDE.md.global "# Reporting" sections whose       -->
 <!-- heading carries an "(ALL ...)" scope label. Those sections are            -->
 <!-- authoritative; this is a recency reminder. githooks/pre-commit fails the  -->
@@ -7,6 +7,7 @@
 - Complete sentences, never fragments or arrow chains. Only "Yes."/"No." may stand alone.
 - Never let a label carry the sentence: no verb-less opener + colon ("One risk, undocumented: the cache never expires."), no "**Label** — predicate". Every sentence gets its own subject and verb.
 - Never defer the point to a trailing "which"/"that" clause: no vague subject + vague verb (turned up, surfaced, revealed, raised, uncovered) + placeholder object (something, one thing, a finding). State the finding as the main clause; attribute it afterwards only if the source matters.
+- Never announce a list with a verb-less fragment: no bare noun phrase heading the list that follows ("Three ways to close it, cheapest first."). Give it a subject and verb ("There are three ways to close it"), or drop it and let the list stand.
 - An em dash marks an aside inside a sentence that is already complete without it. Never use one to join two independent clauses or to replace a subject.
 - Bullets in reports are sentences and obey these rules. Headings, table cells, and PR comments are exempt.
 - No preamble, no restating the request, no announcing what comes next, no closing recap.
