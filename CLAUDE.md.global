@@ -38,6 +38,7 @@ Read linked doc BEFORE any work in that area. No exceptions.
 - ALWAYS run focused tests locally for what you just touched. One package or one test beats a CI round trip.
 - No CI configured, or CI unreachable → run the full suite locally.
 - Offloaded → "tests pass" waits on the CI result. Report what CI reported. NEVER present a local partial run as the suite.
+- Opened or pushed to a PR → ALWAYS watch its checks to the end, fix trivial failures. See git-operations.md "PR CI Watch".
 
 ## Multi-stage work (PR stack, experiment matrix, measurement tooling)
 
