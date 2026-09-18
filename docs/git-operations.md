@@ -60,6 +60,25 @@ Before pushing to a branch that has an associated PR, verify the PR is still ope
 
 If state is `MERGED` or `CLOSED`, STOP. Do NOT push. Report to user that the PR is already merged/closed.
 
+## PR CI Watch
+
+After `gh pr create`, and after every push to an open PR's branch, watch that PR's checks until they finish.
+NEVER report the PR as done, green, or ready while any check is still pending.
+
+- Watch: `gh pr checks <pr> --watch --fail-fast --interval 30`. Set the Bash tool timeout to the expected run
+  duration (max 600000 ms). Timed out → run the same command again. Exit code 8 means pending, NOT success.
+- Failed → store the log before diagnosing: `gh run view <run-id> --log-failed > .tmp/gh-ci-<run-id>.log`.
+  Get `<run-id>` from the `link` field of `gh pr checks <pr> --json name,state,link`.
+
+| Failure | Action |
+|---------|--------|
+| Formatter/linter diff, stale generated file, missing import, typo, missing entry in a list or matrix | Trivial. Fix, commit, push, watch again |
+| Failing assertion about real behavior, runner/infra error, flake, anything needing a design decision | STOP. Report check name + failing excerpt to user |
+
+- Trivial = mechanical fix, no intended-behavior change, no choice to make. Unsure → NOT trivial. Report it.
+- Same check still failing after 2 fix pushes → STOP and report, even if each fix looked trivial.
+- Push Guard applies to every fix push.
+
 ## Merged Branch Detection
 
 ALWAYS verify before worktree/branch deletion. Use the `git-detect-merged` skill to check, then the `git-cleanup-merged` skill to delete.
