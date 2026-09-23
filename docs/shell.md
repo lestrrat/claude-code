@@ -22,6 +22,7 @@ ALWAYS use a dedicated tool where one exists. Bash is for commands with no tool 
 | Write files | `Write` tool | `echo`/`cat` with redirection |
 | Search content | `grep`/`rg` in Bash | — |
 | Find files | `find` in Bash | — |
+| One-shot JSON parsing | `jq` | `python` |
 
 There is no `Grep` or `Glob` tool. Check the session's tool list before using any tool named here.
 
