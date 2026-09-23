@@ -1,4 +1,4 @@
-<!-- owner-sha256: 83e94df32110f1796e5e4d2d5b5433de919a8cb12a872a82f499f09b51e6886f -->
+<!-- owner-sha256: d1d8378cfee9cfbc082c652eac51104167f88a1012c88bd539f8e18e8a1b6bfa -->
 <!-- Condensed copy of the CLAUDE.md.global "# Reporting" sections whose       -->
 <!-- heading carries an "(ALL ...)" scope label. Those sections are            -->
 <!-- authoritative; this is a recency reminder. githooks/pre-commit fails the  -->
@@ -23,8 +23,14 @@
 - Never invent a percentage. Asked for one: say no defensible number exists without agreed milestone weights, then give the counts.
 - Direct question: the first sentence is the answer, before any explanation.
 - Interim update: what changed, then next step. End with the user's action items or "Nothing needed from you."
+- An interim action item asking the user to decide carries its tradeoff too; bullets do not count against the sentence budget.
 - Final report: summary of work plus the worktree or directory, then the action-items block last.
 - That block is literally `**Action items**` with one bullet per item, or the single line "Nothing needed from you." Never fold it into a summary sentence.
 - "No blockers" and "nothing left undone" are status claims, not action items, and never stand in for that block.
 - Action items are blockers, next steps now unblocked, reversible non-obvious choices to confirm or override, and assumptions baked into new behavior.
+- Any item asking the user to decide must carry its tradeoff: name each option, then say per option what it gains and what it costs, in concrete terms (numbers, named files or tests, scope, time) wherever they exist.
+- Never hand over a bare threshold or an unnamed alternative ("decide whether to keep the 0.5s timeout"). The user cannot answer without knowing what each side buys and costs.
+- Recommend one option and give one clause of why. The recommendation never replaces the per-option gain and cost.
+- If a gain or cost is unknown, say what is unknown and what would settle it. Never invent a number.
+- The ban on arguing covers a decision already made. An item the user must decide still carries its tradeoff.
 - A task prompt's own "report back" list is additive. It never replaces that block or moves it off the end.
