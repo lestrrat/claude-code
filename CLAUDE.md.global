@@ -118,6 +118,7 @@ Read linked doc BEFORE any work in that area. No exceptions.
 - One idea per sentence, ≤ ~20 words. NEVER semicolon-chain clauses or nest conditionals — split into separate sentences.
 - Anchor identifiers on first mention per update: `#30 (retention rules)`, not bare `#30`. Applies to PR/issue numbers, branches, agent names.
 - 2+ independent items → one short bullet per item, NOT packed prose. Sentence budget covers only the non-bullet portion.
+- Action item asking the user to decide → carries its tradeoff, per "Final report". Bullets are budget-exempt.
 
 ## Final report (ALL final reports)
 
@@ -129,6 +130,12 @@ Read linked doc BEFORE any work in that area. No exceptions.
 - Action item = anything the user may need to do or decide: blockers; next steps now unblocked (push, open PR,
   run X, read Y); a reversible non-obvious choice made without asking, listed as confirm-or-override; an
   assumption baked into new behavior.
+- ANY item asking the user to decide MUST carry its tradeoff: name each option, then per option what it gains
+  and what it costs, in concrete terms (numbers, named files/tests, scope, time) where they exist. NEVER hand
+  over a bare threshold or an unnamed alternative ("decide whether to keep the 0.5s timeout") → unanswerable.
+- Recommend ONE option + one clause of why. NEVER let the recommendation replace the per-option gain/cost.
+- Gain/cost unknown → say what is unknown + what would settle it. NEVER invent one ("Progress" owns numbers).
+- "Stance"'s no-arguing rule covers a decision ALREADY made. A decide-item MUST carry its tradeoff.
 - Non-obvious + reversible + not asked first → goes in the block as a confirm item, NOT only as narrated
   rationale in the body (pairs with "Stance").
 - Delegating prompt's own "report back: X, Y, Z" spec is ADDITIVE. It NEVER replaces this block or moves it
