@@ -60,6 +60,15 @@ Before pushing to a branch that has an associated PR, verify the PR is still ope
 
 If state is `MERGED` or `CLOSED`, STOP. Do NOT push. Report to user that the PR is already merged/closed.
 
+## Go Lint Before PR
+
+- If commits for a PR change `.go` files, run every Go lint check configured by repository CI before first push or
+  `gh pr create`.
+- If CI defines no Go lint check, run repository's documented Go lint command; otherwise run `golangci-lint run ./...`
+  from repository root.
+- Fix lint errors caused by changes, then rerun lint after last Go edit. NEVER push or create PR while lint fails.
+- Repeat before later pushes that include Go changes. If lint cannot run or errors are outside task scope, stop and report.
+
 ## PR CI Watch
 
 After `gh pr create`, and after every push to an open PR's branch, watch that PR's checks until they finish.
