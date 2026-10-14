@@ -76,6 +76,10 @@ NEVER report the PR as done, green, or ready while any check is still pending.
 
 - Watch: `gh pr checks <pr> --watch --fail-fast --interval 30`. Set the Bash tool timeout to the expected run
   duration (max 600000 ms). Timed out → run the same command again. Exit code 8 means pending, NOT success.
+- Run the watch with Bash `run_in_background: true` → harness re-invokes on exit, no agent turns spent waiting.
+- NEVER poll CI state by repeating `gh pr view`/`gh pr checks` without `--watch`, or by looping with sleeps.
+  `--watch` blocks on one command; repeated calls burn turns and API quota.
+- Delegating the wait → `pr-checks-monitor` agent.
 - Failed → store the log before diagnosing: `gh run view <run-id> --log-failed > .tmp/gh-ci-<run-id>.log`.
   Get `<run-id>` from the `link` field of `gh pr checks <pr> --json name,state,link`.
 
