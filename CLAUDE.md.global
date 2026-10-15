@@ -41,6 +41,23 @@ Read linked doc BEFORE any work in that area. No exceptions.
 - Before pushing Go code for a PR or creating a PR with Go code changes → follow git-operations.md "Go Lint Before PR".
 - Opened or pushed to a PR → ALWAYS watch its checks to the end, fix trivial failures. See git-operations.md "PR CI Watch".
 
+## Test diagnostics — memory-safe failure output
+
+- NEVER pass a large, cyclic, or heavily shared object graph (mesh, AST, dependency graph, nested pointers) directly
+  to an assertion or failure formatter that may recursively dump or diff it. Compare fields or invariants instead.
+- Separate comparison from reporting. Report only bounded data: field names, IDs, counts, scalars, or a small capped
+  sample of differences.
+- Before using a deep-equality helper, check the assertion library's FAILURE path. A passing assertion is cheap; the
+  failure path may build a full dump first, so truncating the final message does not help.
+  E.g. Go: testify `require.Equal` on a mesh snapshot → `assert.diff` → `spew.Sdump` → `bytes.Buffer` growth; the
+  buffers held 99.8% of sampled live memory.
+- Keep test strength. NEVER replace a meaningful equality check with counts or hashes unless they establish the invariant.
+- Mutation tests and deliberately failing tests can be resource-heavy. Run risky cases serially under hard aggregate
+  memory + time limits (e.g. cgroup, `ulimit`, `timeout`). `GOMEMLIMIT` is a soft target, NOT a hard cap.
+  Unexpected failure, timeout, or resource exhaustion → stop the sequence.
+- Verify diagnostics stay bounded with a small deliberately failing case. NEVER reproduce a known memory explosion
+  without isolation and hard limits.
+
 ## Multi-stage work (PR stack, experiment matrix, measurement tooling)
 
 - Run ONE real end-to-end instance of the deliverable FIRST: smallest input, real components, no substitute fixtures.
