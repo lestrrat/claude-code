@@ -20,6 +20,7 @@ Read all `.go` files in the target directory. For each file, identify:
 - **Dominant responsibility** — from actual types/functions/methods/tests inside, NOT from filename.
 - **Content/name mismatch** — filename does not reflect what the file actually contains.
 - **Suffix smell** — `_core`/`_impl`/`_base`/`_misc`/`_helpers`/`_v2`/`_round2` name layering or authoring order, not responsibility. Flag for rename or merge regardless of size.
+- **Name-family sprawl** — several files sharing a prefix or stem (e.g. `parser_a.go`, `parser_b.go`, `parser_c.go`; `foo.go` + `foo_helper.go`). Flag for consolidation review.
 - **Size** — flag files over ~1000 lines (too large) or under ~50 lines (candidate for merging).
 - **Generated files** — files with `// Code generated` headers or `//go:generate` directives.
 - **Test files** — `*_test.go` files and what they actually test.
@@ -43,6 +44,14 @@ Design a new file layout around coherent responsibility groups.
 - If code is too small to justify a standalone file, fold into closest coherent owner.
 - Prefer merging five tiny leaf files into one coherent `node_leaf.go` over leaving many 20–50 line files.
 - Prefer one more themed file over one oversized mixed-responsibility file.
+
+### Consolidation rules
+
+- Files sharing a prefix/stem (`parser_*.go`) MUST be reviewed as one family. Merge into one file when the combined size fits the sizing target and the contents form one concept.
+- Different names for one responsibility (`foo.go`, `foo_util.go`, `foo_stuff.go`) → merge into the file named for that responsibility.
+- Family exceeds the sizing target → keep split, but along responsibility lines with consistent suffixes (`parser_element.go`, `parser_attr.go`), not arbitrary parts.
+- Shared prefix with unrelated contents → NOT a family. Rename to the real responsibility instead of merging.
+- Apply the same rule to `*_test.go` families: `foo_test.go`, `foo_extra_test.go`, `foo_more_test.go` → `foo_test.go`.
 
 ### Placement rules
 
