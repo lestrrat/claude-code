@@ -20,6 +20,7 @@ Read linked doc BEFORE any work in that area. No exceptions.
 | Agent docs | Writing/editing CLAUDE.md, docs/, skills/ | `~/.claude/docs/agent-instructions.md` |
 | Prose | Writing/editing prose a human reads: README, docs/, guides, doc comments | `~/.claude/docs/prose.md` |
 | Claude Code | Claude Code ONLY: task delegation, `/codex-exec`, slash-command workflows | `~/.claude/docs/claude-code.md` |
+| Codex | Codex ONLY: subagent spawning, `wait_agent` | `~/.claude/docs/codex.md` |
 
 # GitHub
 

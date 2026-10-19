@@ -13,7 +13,7 @@ Claude Code configuration dotfiles. No application code and no build step. A few
 | Path | Purpose |
 |------|---------|
 | `CLAUDE.md.global` | Global instructions → symlinked as `~/.claude/CLAUDE.md` (name changes) |
-| `docs/` | Reference docs loaded on-demand per pre-read rules table in `CLAUDE.md.global` |
+| `docs/` | Reference docs loaded on-demand per pre-read rules table in `CLAUDE.md.global`. `claude-code.md` is Claude-only, `codex.md` Codex-only; Codex reads `CLAUDE.md.global` via `~/.codex/AGENTS.md` |
 | `scripts/` | Reusable shell scripts → symlinked as `~/.claude/scripts/` |
 | `skills/` | User-invocable skills with YAML front matter (`name`, `description`) + steps |
 | `settings.json` | Permission config (`bypassPermissions` default) + hook registrations |
