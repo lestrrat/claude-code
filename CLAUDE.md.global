@@ -26,6 +26,11 @@ Read linked doc BEFORE any work in that area. No exceptions.
 
 - ALWAYS use `gh` CLI for GitHub interactions. NEVER scrape pages or construct API URLs manually.
 - Large/multi-record `gh` output → store to `.tmp/` first (see shell.md Output Storage). Single-value `--jq` queries OK direct.
+- NEVER use GitHub as a message channel between agents, sessions, or repos. NEVER run `gh issue create`, `gh issue comment`, `gh pr comment`, or an equivalent API write to hand off work, requests, findings, or status.
+  Write it to a local file instead: the target repo's design doc (`docs/`) when the work is known, else a handoff file in the current repo (e.g. `docs/handoff-<topic>.md`). Tell the user where it is.
+- Exceptions: the user explicitly asks for that issue/comment in this task, or the task is replying on a PR/issue the user pointed you at (e.g. addressing review comments).
+  Approval for one issue/comment does not extend to the next.
+- Cross-repo work needed → write the local file, report it as an action item, and stop. NEVER file it in the other repo's tracker.
 
 # Execution
 
