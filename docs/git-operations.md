@@ -82,6 +82,10 @@ NEVER report the PR as done, green, or ready while any check is still pending.
 - Delegating the wait → `pr-checks-monitor` agent.
 - Failed → store the log before diagnosing: `gh run view <run-id> --log-failed > .tmp/gh-ci-<run-id>.log`.
   Get `<run-id>` from the `link` field of `gh pr checks <pr> --json name,state,link`.
+- One job failed while others still run → start diagnosing at once. NEVER wait for the remaining jobs.
+  A finished job's log is enough: `gh run view --job <job-id> --log-failed > .tmp/gh-ci-job-<job-id>.log`.
+  Wait for the rest only when the failed job's log gives nothing to debug (e.g. cancelled, no output).
+  A fix pushed mid-run supersedes the still-running jobs. Their results are not needed.
 
 | Failure | Action |
 |---------|--------|
