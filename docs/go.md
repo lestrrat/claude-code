@@ -14,6 +14,14 @@ Standard library and runtime source: `go env GOROOT` returns the root directory.
 - NEVER pass `"."` as `os.MkdirTemp` parent — first arg is the PARENT dir, so `"."` writes into package source dir → leftovers on failure, suite unrunnable from read-only checkout (sandboxed reviewer, read-only mount). Use `t.TempDir()`; `os.MkdirTemp("", …)` only where no `*testing.T` exists.
 - Scratch `go.mod` with `replace` back to repo → absolute path via `filepath.Abs` + `filepath.ToSlash`. Relative `=> ../..` silently depends on scratch dir nesting inside repo → breaks under `$TMPDIR`.
 
+## Build Cache
+
+Use the default Go build cache. Custom caches (`GOCACHE=…`, `GOMODCACHE=…`) are discouraged, not forbidden.
+
+- Custom cache created → MUST remove it before the task ends: `go clean -cache` with the same `GOCACHE` set, then delete the directory. Read-only module caches need `chmod -R u+w` first.
+- NEVER leave a custom cache behind on success, failure, or abort. Each one holds hundreds of MB and nothing else cleans it.
+- NEVER run `go clean -cache` against the default cache to "tidy up" — other sessions share it.
+
 ## Examples
 
 Write user-facing usage examples as Go executable examples (`Example*` functions verified by `go test`) — NEVER as README-only snippets or untested markdown code blocks.
