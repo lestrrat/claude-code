@@ -53,6 +53,13 @@ Defaults, not hard rules — deviate when a clearer structure fits. The build-co
 - Prefer removing `else` via early return/continue/break when possible.
 - Don't wrap a single function/method call in a closure when the function itself can be passed directly. Pass `foo` instead of `func() { foo() }` or `func(x T) { foo(x) }` — the wrapper adds no value and obscures the call. (A closure that adapts signatures, binds extra args, or adds logic is fine.)
 
+## Sorting
+
+- Sort with `slices.SortFunc` / `slices.SortStableFunc`, not `sort.Slice`. Typed, no reflection swapper → faster.
+- Float keys → `cmp.Compare(a, b)` in the comparator. Orders NaN before numbers → total order, no NaN pre-scan.
+- NEVER keep a second `sort.Slice` path only to preserve old NaN behavior. `<` with NaN is no valid order. Use the single `cmp.Compare` path.
+- Exception: input NaN-free by contract → plain `<` / `>` comparator is fine.
+
 ## Design
 
 - Prefer interfaces over function callbacks for public APIs, struct fields, and dependency injection. Interfaces are easier to mock in tests and compose with other abstractions. For example, prefer `http.Handler` (interface) over `http.HandleFunc` (function callback) — the interface version can carry state, implement multiple methods, and is easier to wrap with middleware.
