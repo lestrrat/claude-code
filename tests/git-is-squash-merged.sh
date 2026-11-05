@@ -230,6 +230,39 @@ else
   FAIL=$((FAIL + 1)); printf 'FAIL  %-46s want rc=1 got rc=%s\n' "sibling branch stays unmerged" "$OTHRC"
 fi
 
+# Context drift: the target changed lines near the branch's edit before the squash,
+# so the squash commit's diff carries different context lines than the branch's own
+# diff and their patch-ids differ. A later edit then defeats the current-tree check.
+mkdrift() {
+  local r="$1"
+  seq 1 20 > "$r/d.txt"; git -C "$r" add -A; git -C "$r" commit -qm "drift base"
+  git -C "$r" checkout -qb feat
+  sed -i '10s/.*/TEN-FEAT/' "$r/d.txt"; git -C "$r" commit -qam "feat edit"
+  git -C "$r" checkout -q main
+  sed -i '8s/.*/EIGHT-MAIN/' "$r/d.txt"; git -C "$r" commit -qam "main edits nearby"
+}
+
+# 21. squash merged after context drift, then the same line edited again.
+R=$(newrepo); mkdrift "$R"; squash_in "$R"
+sed -i '10s/.*/TEN-LATER/' "$R/d.txt"; git -C "$R" commit -qam "later edit"
+check "squash after context drift, line edited later" "$R" 0
+
+# 22. as 21, but the squash commit was reverted afterwards.
+R=$(newrepo); mkdrift "$R"; squash_in "$R"
+git -C "$R" revert --no-edit HEAD >/dev/null 2>&1
+check "drifted squash then reverted" "$R" 1
+
+# 23. as 21, but reverted after main moved near again (revert has drifted context).
+R=$(newrepo); mkdrift "$R"; squash_in "$R"
+sed -i '12s/.*/TWELVE-MAIN/' "$R/d.txt"; git -C "$R" commit -qam "main edits nearby again"
+git -C "$R" revert --no-edit HEAD~1 >/dev/null 2>&1
+check "drifted squash, reverted with drifted context" "$R" 1
+
+# 24. never merged: the target edits near the branch's lines but not the same change.
+R=$(newrepo); mkdrift "$R"
+sed -i '10s/.*/TEN-MAIN/' "$R/d.txt"; git -C "$R" commit -qam "main edits same line differently"
+check "unmerged, target edited same line differently" "$R" 1
+
 echo "----"
 echo "pass=$PASS fail=$FAIL"
 [ "$FAIL" = 0 ]
