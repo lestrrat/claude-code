@@ -94,6 +94,37 @@ commit_reverse_patch_id() {
   patch_id_of "$1" "$1^"
 }
 
+# merge_result_is_tree — does a 3-way merge give tree $1? Remaining args go to
+# `git merge-tree --write-tree`. A conflict or error returns 1: "not proven".
+merge_result_is_tree() {
+  local want="$1" got
+  shift
+  got=$(git merge-tree --write-tree "$@" 2>/dev/null) || return 1
+  got=${got%%$'\n'*}
+  [ -n "$got" ] && [ "$got" = "$want" ]
+}
+
+# landed_at — is target commit $1 exactly what merging BRANCH into $1's first parent
+# produces? Patch-ids cannot answer this once the target moved near the branch's
+# lines before the squash: the squash commit's diff then carries different context
+# lines than the branch's own diff, so the ids differ although the change is the
+# same. Replaying the merge compares results, not diffs, so context cannot matter.
+landed_at() {
+  local want
+  want=$(git rev-parse --verify --quiet "$1^{tree}") || return 1
+  merge_result_is_tree "$want" "$1^" "$BRANCH"
+}
+
+# reverted_at — is target commit $1 exactly what undoing the branch's net change on
+# $1's first parent produces? The undo is a merge with BRANCH as the base and the
+# fork point as the other side. Same reason as landed_at: a revert made after the
+# target drifted carries different context than the reverse of the branch diff.
+reverted_at() {
+  local want
+  want=$(git rev-parse --verify --quiet "$1^{tree}") || return 1
+  merge_result_is_tree "$want" --merge-base="$BRANCH" "$1^" "$base"
+}
+
 # Phase 1: cherry check. `git cherry` marks a branch commit `-` when an equivalent
 # patch already exists on the target side, so no `+` line means every commit the
 # branch carries has landed. That is the plain squash/rebase-merge shape.
@@ -248,6 +279,15 @@ while IFS= read -r hash; do
   if pid_in_set "$commit_pid" "$REVERT_PIDS"; then
     # The branch landed and was then reverted, or never landed and the target
     # happens to carry its inverse. Either way the changes are not there now.
+    exit 1
+  fi
+  # Patch-ids did not match. Fall back to replaying the merge, which survives
+  # context drift. Same newest-first order, so a revert seen first still wins.
+  if landed_at "$hash"; then
+    echo "squash-merged:$METHOD"
+    exit 0
+  fi
+  if reverted_at "$hash"; then
     exit 1
   fi
 done < <(git log "${log_args[@]}")
