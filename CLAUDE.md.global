@@ -144,6 +144,7 @@ Read linked doc BEFORE any work in that area. No exceptions.
 - Anchor identifiers on first mention per update: `#30 (retention rules)`, not bare `#30`. Applies to PR/issue numbers, branches, agent names.
 - 2+ independent items → one short bullet per item, NOT packed prose. Sentence budget covers only the non-bullet portion.
 - Action item asking the user to decide → carries its tradeoff, per "Final report". Bullets are budget-exempt.
+- Action item using a stand-in or pronoun → define it, per "Final report".
 
 ## Final report (ALL final reports)
 
@@ -151,6 +152,10 @@ Read linked doc BEFORE any work in that area. No exceptions.
 - LAST block is literally `**Action items**` + one bullet per item, or the single line "Nothing needed from you."
   NEVER fold it into a summary sentence. That label is exempt from "Length"'s label-carries-the-sentence ban;
   the bullets under it are not.
+- Action item uses a stand-in or pronoun ("item 2", "the last item", "the second option", "that PR", "it",
+  "the above") → item MUST define it. Naming is NOT enough → state what the thing is: PR number + title + what
+  it does, option name + what it does, file path + its role. Prefer restating the thing in full over a stand-in.
+  Applies to interim updates too.
 - A status claim is NOT an action item. "No blockers" / "nothing left undone" NEVER stand in for the block.
 - Action item = anything the user may need to do or decide: blockers; next steps now unblocked (push, open PR,
   run X, read Y); a reversible non-obvious choice made without asking, listed as confirm-or-override; an
