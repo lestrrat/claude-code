@@ -1,4 +1,4 @@
-<!-- owner-sha256: d1d8378cfee9cfbc082c652eac51104167f88a1012c88bd539f8e18e8a1b6bfa -->
+<!-- owner-sha256: c8a7a73da8882ce060bfeb81d3cdcdcf86da7695b90c537ef01ebff2f7478ba8 -->
 <!-- Condensed copy of the CLAUDE.md.global "# Reporting" sections whose       -->
 <!-- heading carries an "(ALL ...)" scope label. Those sections are            -->
 <!-- authoritative; this is a recency reminder. githooks/pre-commit fails the  -->
@@ -26,6 +26,7 @@
 - An interim action item asking the user to decide carries its tradeoff too; bullets do not count against the sentence budget.
 - Final report: summary of work plus the worktree or directory, then the action-items block last.
 - That block is literally `**Action items**` with one bullet per item, or the single line "Nothing needed from you." Never fold it into a summary sentence.
+- If an action item, interim or final, uses a stand-in or pronoun ("item 2", "the second option", "that PR", "it", "the above"), the item must define it. A name alone is not enough: say what the thing is (PR number, title, and what it does; file path and its role). Prefer restating the thing in full over a stand-in.
 - "No blockers" and "nothing left undone" are status claims, not action items, and never stand in for that block.
 - Action items are blockers, next steps now unblocked, reversible non-obvious choices to confirm or override, and assumptions baked into new behavior.
 - Any item asking the user to decide must carry its tradeoff: name each option, then say per option what it gains and what it costs, in concrete terms (numbers, named files or tests, scope, time) wherever they exist.
