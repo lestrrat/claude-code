@@ -17,6 +17,7 @@ Read linked doc BEFORE any work in that area. No exceptions.
 | Go | Writing Go code | `~/.claude/docs/go.md` |
 | Go servers | Writing Go server, daemon, worker, listener, or other long-lived-goroutine code | `~/.claude/docs/go-server-lifecycle.md` |
 | Debugging | Fixing complex/multi-component bugs | `~/.claude/docs/debugging.md` |
+| Learnings | Starting non-trivial build/debug/perf/refactor work; or overcame an obstacle in it | `~/.claude/docs/learnings.md` |
 | Agent docs | Writing/editing CLAUDE.md, docs/, skills/ | `~/.claude/docs/agent-instructions.md` |
 | Prose | Writing/editing prose a human reads: README, docs/, guides, doc comments | `~/.claude/docs/prose.md` |
 | Inter-agent messages | Sending structured orchestrator/worker messages | `~/.claude/docs/inter-agent-messages.md` |
