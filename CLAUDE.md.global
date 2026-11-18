@@ -21,7 +21,7 @@ Read linked doc BEFORE any work in that area. No exceptions.
 | Agent docs | Writing/editing CLAUDE.md, docs/, skills/ | `~/.claude/docs/agent-instructions.md` |
 | Prose | Writing/editing prose a human reads: README, docs/, guides, doc comments | `~/.claude/docs/prose.md` |
 | Inter-agent messages | Sending structured orchestrator/worker messages | `~/.claude/docs/inter-agent-messages.md` |
-| Claude Code | Claude Code ONLY: task delegation, `/codex-exec`, slash-command workflows | `~/.claude/docs/claude-code.md` |
+| Claude Code | Claude Code ONLY: task delegation, messaging or reporting on a subagent, `/codex-exec`, slash-command workflows | `~/.claude/docs/claude-code.md` |
 | Codex | Codex ONLY: subagent spawning, `wait_agent` | `~/.claude/docs/codex.md` |
 
 # GitHub
@@ -132,6 +132,8 @@ Read linked doc BEFORE any work in that area. No exceptions.
 
 - Progress = objective counts: what exists, what passed full integration, N of M planned runs done, whether the
   conclusion is supported. PRs opened, green CI, and passing unit tests are activity, not progress.
+- A subagent's status ("running", "done", "nothing needed") MUST come from a check made this turn, named in the claim.
+  NEVER infer it from a notification or the agent's last message. Claude Code checks: claude-code.md "Tracking Subagents".
 - NEVER invent a percentage. Asked for one → say no defensible number exists without agreed milestone weights,
   then give the counts.
 

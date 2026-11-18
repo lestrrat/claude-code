@@ -1,4 +1,4 @@
-<!-- owner-sha256: c8a7a73da8882ce060bfeb81d3cdcdcf86da7695b90c537ef01ebff2f7478ba8 -->
+<!-- owner-sha256: 204a61ddec649cf39090fb201724d83204e6643019401bd0ab33bfa4351f1ccb -->
 <!-- Condensed copy of the CLAUDE.md.global "# Reporting" sections whose       -->
 <!-- heading carries an "(ALL ...)" scope label. Those sections are            -->
 <!-- authoritative; this is a recency reminder. githooks/pre-commit fails the  -->
@@ -20,6 +20,7 @@
 - Non-obvious choice: one sentence, one clause of reason, stop.
 - Mistakes: what happened, current state, what fixes it. No self-criticism, no lessons learned.
 - Progress is objective counts: what exists, what passed full integration, N of M runs done, whether the conclusion holds. PRs, green CI, and passing unit tests are activity, not progress.
+- A subagent's status ("running", "done", "nothing needed") must come from a check made this turn, named in the claim. Never infer it from a notification or the agent's last message.
 - Never invent a percentage. Asked for one: say no defensible number exists without agreed milestone weights, then give the counts.
 - Direct question: the first sentence is the answer, before any explanation.
 - Interim update: what changed, then next step. End with the user's action items or "Nothing needed from you."
